@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+  <meta charset="utf-8">
+  <head>
+
+    <title>Play Canon Online</title>
+
+    <!-- Load style sheet -->
+    <link href="styles.css" media="screen" rel="stylesheet" type="text/css">
+
+
+    <!-- Libs -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="text/javascript" src="/keyboard.js"></script>
+
+
+    <!-- Game -->
+    <script type="text/javascript" src="/game.shared.js"></script>
+    <script type="text/javascript" src="/game.client.js"></script>
+
+  </head>
+
+  <body>
+    <div id="lobbies-list">
+    </div>
+
+    <div id="create-lobby">
+      <button onclick="createLobby()">Create lobby</button>
+    </div>
+
+    <div id="lobby"></div>
+
+    <canvas id="viewport">
+    </canvas>
+
+    <script type="text/javascript">
+      var lobbiesList = {},
+          chatEmpty;
+
+      socket.emit('init', localStorage.getItem('userid'));
+
+      socket.on('initialized', function (user) {
+        localStorage.setItem('userid', user.id);
+
+        var username = localStorage.getItem('username') || window.prompt('Welcome. Choose a username');
+        localStorage.setItem('username', username);
+        socket.emit('username', username);
+      });
+
+      socket.on('lobbies', function (lobbies) {
+        console.log(lobbies);
+        var template = '';
+
+        if (!Object.keys(lobbies).length) {
+          template += 'There are no lobbies created at the moment.';
+        } else {
+          for (var i in lobbies) {
+            var lobby = lobbies[i]
+            lobbiesList[ lobby.id ] = lobby;
+            template += lobby.name + ' — ' + lobby.player_count + '/2 players — <a href="#" onclick="joinLobby(\'' + lobby.id + '\')">join</a><br>';
+          }
+        }
+
+        document.getElementById('lobbies-list').innerHTML = template;
+      });
+
+      socket.on('chat', function (chat) {
+        if (chatEmpty) {
+          chatEmpty = false;
+          console.log(chat);
+          document.getElementById('chat').innerHTML = '';
+        }
+
+        document.getElementById('chat').innerHTML += '<strong>' + chat.from + '</strong> ' + chat.message + '<br>';
+      });
+
+      function createLobby () {
+        var name = window.prompt('Name the lobby:').replace('.', '');
+
+        socket.emit('pregame', 'c.'+name);
+      }
+
+      function joinLobby (id) {
+        socket.emit('pregame', 'j.'+id);
+
+        chatEmpty = true;
+        var template = '<h2>' + lobbiesList[id].name + '</h2> <div id="chat">No message yet<br></div><div><form onsubmit="messageLobby()"><input id="message" type="text" /></form><br><button onclick="startGame()">Start game</button>';
+        document.getElementById('lobby').innerHTML = template;
+      }
+
+      function messageLobby () {
+        var message = document.getElementById('message').value;
+        document.getElementById('message').value = '';
+        socket.emit('pregame', 'm.'+message);
+
+        return false;
+      }
+
+      function startGame () {
+        socket.emit('pregame', 's');
+      }
+    </script>
+  </body>
+
+</html>

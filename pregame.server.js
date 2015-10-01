@@ -88,7 +88,7 @@ pregame_server.onMessage = function (client, message) {
 
     // start game from lobby
     case 's':
-      if (client.lobby.player_count == 2) {
+      if (client.lobby && client.lobby.player_count == 2) {
         game_server.createGame(client.lobby.players);
       }
       break;

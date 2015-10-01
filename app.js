@@ -16,14 +16,14 @@ console.log( 'Express server started, listening on port ' + port );
 // handle '/'
 app.get( '/', function( req, res ){
   console.log('Client requesting %s', __dirname + '/index.html');
-  res.sendFile( '/index.html' , { root:__dirname });
+  res.sendfile( '/index.html' , { root:__dirname });
 });
 
 // handle the rest
 app.get( '/*' , function( req, res, next ) {
   var file = req.params[0];
 
-  res.sendFile( __dirname + '/' + file );
+  res.sendfile( __dirname + '/' + file );
 });
 
 var

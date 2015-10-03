@@ -6,6 +6,12 @@ html , body {
   padding: 0;
 }
 
+.container {
+  width: 800px;
+  margin: 0 auto;
+  text-align: center;
+}
+
 #viewport {
   border:solid 1px #333;
   height : 480px;
@@ -14,4 +20,157 @@ html , body {
   position: absolute;
   width : 720px;
   z-index:100;
+}
+
+h1 {
+  margin-bottom: 100px;
+}
+
+.view {
+  display: none;
+}
+
+.title {
+  position: relative;
+  top: -20px;
+  padding: 0 10px;
+  background-color: #212121;
+}
+
+#set-user-name {
+  position: relative;
+  border: 1px solid white;
+  width: 400px;
+  margin: 0 auto;
+  padding: 10px;
+  text-align: left;
+}
+
+#username {
+  display: block;
+  width: 90%;
+  height: 30px;
+  border: 0;
+  padding: 2%;
+  border-radius: 4px;
+  font-size: 18px;
+  margin: 20px auto 10px auto;
+}
+
+#set-user-name input[type="submit"] {
+  cursor: pointer;
+  position: relative;
+  bottom: -30px;
+  left: 210px;
+  height: 40px;
+  width: 140px;
+  font-size: 16px;
+  border-radius: 4px;
+  border: 1px solid white;
+  background-color: #212121;
+  color: white;
+}
+
+#join-game {
+  height: 400px;
+  text-align: left;
+}
+
+.chat-window {
+  float: left;
+  width: 70%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1px solid white;
+  position: relative;
+}
+
+#messages {
+  padding: 10px;
+  height: 348px;
+  overflow: scroll;
+}
+
+#inputs, #lobby-creation, #game-controls {
+  position: absolute;
+  bottom: 0px;
+  width: 100%;
+}
+
+#inputs input[type="text"], #lobby-creation input[type="text"] {
+  float: left;
+  box-sizing: border-box;
+  width: 85%;
+  height: 30px;
+  border: 0px;
+  padding: 0px 10px;
+  font-size: 14px;
+  outline: none;
+}
+
+#inputs input[type="submit"], #lobby-creation input[type="submit"] {
+  float: left;
+  width: 15%;
+  height: 30px;
+  border: 0;
+  outline: none;
+  cursor: pointer;
+  border: 1px solid white;
+  background-color: transparent;
+  color: white;
+  font-size: 16px;
+}
+
+#lobby-creation input[type="text"] {
+  width: 60%;
+}
+
+#lobby-creation input[type="submit"] {
+  width: 40%;
+}
+
+.list-window {
+  float: left;
+  margin-left: 5%;
+  width: 25%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1px solid white;
+  position: relative;
+}
+
+#list {
+  margin: 5px;
+}
+
+.lobby-item {
+  padding: 2px 5px;
+}
+
+.lobby-item:hover {
+  background-color: white;
+  color: #212121;
+  cursor: pointer;
+}
+
+#game-controls {
+  display: none;
+}
+
+#game-controls button {
+  display: block;
+  width: 100%;
+  height: 30px;
+  border: 1px solid white;
+  background-color: transparent;
+  color: white;
+  cursor: pointer;
+  outline: none;
+}
+
+#game-controls button.ready {
+  height: 60px;
+  background-color: white;
+  color: #212121;
+  font-size: 27px;
 }

@@ -11,6 +11,8 @@ pregame_server.log = function () {
 pregame_server.connect = function (client) {
   client.join('pregame');
   client.emit('lobbies', this.lobbiesList());
+
+  console.log(client.name, 'joined pregame');;
 };
 
 pregame_server.lobbiesList = function () {
@@ -47,7 +49,7 @@ pregame_server.onMessage = function (client, message) {
     case 'j':
       var lobbyId = messageParts[1];
 
-      if (client.lobby) {
+      if (client.lobby && lobbyId != client.lobby.id) {
         this.leaveLobby(client.lobby, client);
       }
 
@@ -61,6 +63,7 @@ pregame_server.onMessage = function (client, message) {
           lobby.player_count++;
 
           this.sio.to('pregame').emit('lobbies', this.lobbiesList());
+          this.sio.to(lobby.id).emit('lobby', _.mapObject(lobby.players, function (player) { return {username: player.name, userid: player.userid }; }) );
 
           console.log('Player', client.name, 'joined lobby', lobby.name);
         }
@@ -71,8 +74,16 @@ pregame_server.onMessage = function (client, message) {
     case 'm':
       var content = messageParts[1];
 
-      if (client.lobby && content) {
-        this.sio.to(client.lobby.id).emit('chat', {
+      if (content) {
+        var to;
+
+        if (client.lobby) {
+          to = client.lobby.id;
+        } else {
+          to = 'pregame';
+        }
+
+        this.sio.to(to).emit('chat', {
           from: client.name,
           message: content
         });
@@ -83,6 +94,9 @@ pregame_server.onMessage = function (client, message) {
     case 'l':
       if (client.lobby) {
         this.leaveLobby(client.lobby, client);
+
+        client.join('pregame');
+        this.sio.to('pregame').emit('lobbies', this.lobbiesList());
       }
       break;
 
@@ -104,6 +118,9 @@ pregame_server.leaveLobby = function (lobby, client) {
   client.lobby = null;
   delete lobby.players[ client.userid ];
   lobby.player_count--;
+
+  this.sio.to(lobby.id).emit('lobby', _.mapObject(lobby.players, function (player) { return {username: player.name, userid: player.userid }; }) );
+  console.log('Player', client.name, 'left lobby', lobby.name);
 };
 
 pregame_server.isInLobby = function (lobby, client) {

@@ -58,7 +58,7 @@ pregame_server.onMessage = function (client, message) {
 
         if (lobby.player_count < 2 && !this.isInLobby(lobby, client)) {
           client.lobby = lobby;
-          client.join(lobbyId);
+          client.leave('pregame').join(lobbyId);
           lobby.players[ client.userid ] = client;
           lobby.player_count++;
 

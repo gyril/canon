@@ -1,9 +1,10 @@
-var game_core = function (game_instance){
+var game_core = function (game_instance) {
 
   this.instance = game_instance;
   this.server = this.instance !== undefined;
   this.lastTime = 0;
   this.frameTime = 45;
+  this.colors = ['hsl(240, 50%, 50%)', 'hsl(0, 50%, 50%)'];
 
   this.world = {
     width : 720,
@@ -13,15 +14,16 @@ var game_core = function (game_instance){
   this.players = {};
 
   if(this.server) {
-
+    var j = 0;
     for (var i in game_instance.players) {
-      this.players[ i ] = new game_player(this, game_instance.players[i]);
+      this.players[ i ] = new game_player(this, j, game_instance.players[i]);
+      j++;
     }
 
   } else {
 
-    this.players[ 'self' ] = new game_player(this);
-    this.players[ '1' ] = new game_player(this);
+    this.players[ 'self' ] = new game_player(this, 0);
+    this.players[ '1' ] = new game_player(this, 1);
 
   }
 
@@ -639,16 +641,16 @@ game_core.prototype.client_refresh_fps = function() {
 
 
 // player class
-var game_player = function( game_instance, player_instance ) {
+var game_player = function ( game_instance, index, player_instance ) {
       //Store the instance, if any
   this.instance = player_instance;
   this.game = game_instance;
 
       //Set up initial values for our state information
-  this.pos = { x:40, y:460 };
+  this.pos = { x:40 + index * (720 - 40 * 2 - 8), y:460 };
   this.cannon = { angle:0 };
   this.size = { x:16, y:16, hx:8, hy:8 };
-  this.color = 'rgba(255,255,255,0.1)';
+  this.color = this.game.colors[ index ];
   this.id = '';
 
       //These are used in moving us around later
@@ -666,15 +668,6 @@ var game_player = function( game_instance, player_instance ) {
     y_min: this.size.hy,
     y_max: this.game.world.height - this.size.hy
   };
-
-      //The 'host' of a game gets created with a player instance since
-      //the server already knows who they are. If the server starts a game
-      //with only a host, the other player is set up in the 'else' below
-  if (player_instance) {
-    this.pos = { x:40, y:460 };
-  } else {
-    this.pos = { x:680, y:460 };
-  }
 
 }; //game_player.constructor
 

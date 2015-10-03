@@ -1,7 +1,7 @@
 html , body {
   background: #212121;
   color: #fff;
-  font-family: Helvetica;
+  font-family: 'Open Sans';
   margin: 0;
   padding: 0;
 }
@@ -13,12 +13,9 @@ html , body {
 }
 
 #viewport {
-  border:solid 1px #333;
-  height : 480px;
-  margin: auto;
-  left:0; right:0; top:0; bottom:0;
-  position: absolute;
+  border: 1px solid white;
   width : 720px;
+  height : 480px;
   z-index:100;
 }
 
@@ -168,7 +165,7 @@ h1 {
   outline: none;
 }
 
-#game-controls button.ready {
+#game-controls button#ready {
   height: 60px;
   background-color: white;
   color: #212121;

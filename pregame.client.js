@@ -45,11 +45,13 @@ pregame.createLobby = function () {
 };
 
 pregame.startGame = function () {
-  socket.emit('pregame', 's');
+  document.getElementById('ready').textContent = 'waiting…';
+  socket.emit('pregame', 'r');
 };
 
 pregame.leaveLobby = function () {
   pregame.inLobby = false;
+  document.getElementById('ready').textContent = 'READY?';
   socket.emit('pregame', 'l');
 
   document.getElementById('lobby-creation').style.display = 'block';
@@ -66,6 +68,7 @@ window.addEventListener('load', function () {
   pregame.views = {
     'set-user-name': document.getElementById('set-user-name'),
     'join-game': document.getElementById('join-game'),
+    'game': document.getElementById('game'),
     'loading': document.getElementById('loading')
   }
 
@@ -136,6 +139,11 @@ window.addEventListener('load', function () {
   socket.on('chat', function (chat) {
     pregame.messages.innerHTML += '<strong>' + chat.from + '</strong> ' + chat.message + '<br>';
     pregame.messages.scrollTop = pregame.messages.scrollHeight;
+  });
+
+  socket.on('start', function () {
+    pregame.hideView('join-game');
+    pregame.showView('game');
   });
 
   socket.emit('init', pregame.client.userid);

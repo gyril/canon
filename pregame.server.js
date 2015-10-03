@@ -100,11 +100,24 @@ pregame_server.onMessage = function (client, message) {
       }
       break;
 
-    // start game from lobby
-    case 's':
+    // client is ready. start game from lobby if both are
+    case 'r':
+      client.ready = true;
+      console.log('Player', client.name, 'ready to start a game.');
+
       if (client.lobby && client.lobby.player_count == 2) {
-        game_server.createGame(client.lobby.players);
+        var allReady = true;
+        for (var i in client.lobby.players) {
+          if (!client.lobby.players[i].ready) {
+            allReady = false;
+          }
+        }
+        if (allReady) {
+          this.sio.to(client.lobby.id).emit('start');
+          game_server.createGame(client.lobby.players);
+        }
       }
+
       break;
 
 
@@ -118,6 +131,9 @@ pregame_server.leaveLobby = function (lobby, client) {
   client.lobby = null;
   delete lobby.players[ client.userid ];
   lobby.player_count--;
+
+  // in case client said he was ready to start a game
+  client.ready = false;
 
   this.sio.to(lobby.id).emit('lobby', _.mapObject(lobby.players, function (player) { return {username: player.name, userid: player.userid }; }) );
   console.log('Player', client.name, 'left lobby', lobby.name);

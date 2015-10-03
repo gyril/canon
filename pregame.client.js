@@ -100,13 +100,16 @@ window.addEventListener('load', function () {
         var container = document.createElement('div');
         container.classList.add('lobby-item');
         container.innerHTML = lobby.name + ' (' + lobby.player_count + '/2)';
-        container.addEventListener('click', function () {
-          socket.emit('pregame', 'j.'+lobby.id);
-          document.getElementById('lobby-creation').style.display = 'none';
-          document.getElementById('game-controls').style.display = 'block';
-          pregame.messages.innerHTML = '>> You joined the lobby <em>' + lobby.name + '</em>.<br>';
-          pregame.inLobby = true;
-        });
+
+        if (lobby.player_count < 2) {
+          container.addEventListener('click', function () {
+            socket.emit('pregame', 'j.'+lobby.id);
+            document.getElementById('lobby-creation').style.display = 'none';
+            document.getElementById('game-controls').style.display = 'block';
+            pregame.messages.innerHTML = '>> You joined the lobby <em>' + lobby.name + '</em>.<br>';
+            pregame.inLobby = true;
+          });
+        }
 
         pregame.list.appendChild(container);
       })(i)

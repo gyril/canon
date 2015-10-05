@@ -39,7 +39,11 @@ sio.on('connection', function (client) {
   client.on('init', function (id) {
     client.userid = id || uuid();
 
-    client.emit('initialized', { id: client.userid } );
+    if (game_server.isUserInGame(client)) {
+      game_server.reconnect(client);
+    } else {
+      client.emit('initialized', { id: client.userid } );
+    }
 
     console.log('Connected client ' + client.userid);
   });

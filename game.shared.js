@@ -1,7 +1,7 @@
-var game_core = function (game_instance) {
+var game_core = function (id, clients) {
 
-  this.instance = game_instance;
-  this.server = this.instance !== undefined;
+  this.id = id;
+  this.server = this.id !== undefined;
   this.lastTime = 0;
   this.frameTime = 45;
   this.colors = ['hsl(240, 50%, 50%)', 'hsl(0, 50%, 50%)'];
@@ -15,8 +15,8 @@ var game_core = function (game_instance) {
 
   if(this.server) {
     var j = 0;
-    for (var i in game_instance.players) {
-      this.players[ i ] = new game_player(this, j, game_instance.players[i]);
+    for (var i in clients) {
+      this.players[ i ] = new game_player(this, j, clients[i]);
       j++;
     }
 
@@ -82,6 +82,8 @@ if( 'undefined' != typeof global ) {
 Number.prototype.fixed = function(n) { n = n || 3; return parseFloat(this.toFixed(n)); };
     //copies a 2d vector like object from one to another
 game_core.prototype.pos = function(a) { return {x:a.x,y:a.y}; };
+    //copies a 2d vector like object from one to another
+game_core.prototype.cannon = function(a) { return {angle:a.angle}; };
     //Add a 2d vector with another one and return the resulting vector
 game_core.prototype.v_add = function(a,b) { return { x:(a.x+b.x).fixed(), y:(a.y+b.y).fixed() }; };
     //Add an angle with another one and return the resulting angle
@@ -96,6 +98,8 @@ game_core.prototype.stop_update = function() {  window.cancelAnimationFrame( thi
 game_core.prototype.lerp = function(p, n, t) { var _t = Number(t); _t = (Math.max(0, Math.min(1, _t))).fixed(); return (p + _t * (n - p)).fixed(); };
     //Simple linear interpolation between 2 vectors
 game_core.prototype.v_lerp = function(v,tv,t) { return { x: this.lerp(v.x, tv.x, t), y:this.lerp(v.y, tv.y, t) }; };
+    //Simple linear interpolation between 2 angles
+game_core.prototype.a_lerp = function(a,ta,t) { return { angle: this.lerp(a.angle, ta.angle, t) }; };
 
 
 game_core.prototype.create_timer = function () {
@@ -135,13 +139,13 @@ game_core.prototype.server_update = function(){
 
     //Make a snapshot of the current state, for updating the clients
   this.laststate = {
-    pp: _.object(_.map(this.players, function (player) { return [player.instance.userid, {pos: player.pos, cannon: player.cannon}]; })), // players positions
-    is: _.object(_.map(this.players, function (player) { return [player.instance.userid, player.last_input_seq]; })), // players input sequences
+    pp: _.object(_.map(this.players, function (player, userid) { return [userid, {pos: player.pos, cannon: player.cannon}]; })), // players positions
+    is: _.object(_.map(this.players, function (player, userid) { return [userid, player.last_input_seq]; })), // players input sequences
     t : this.server_time
   };
 
   for (var i in this.players) {
-    this.players[i].instance.emit( 'serverupdate', this.laststate );
+    this.players[i].client.emit( 'serverupdate', this.laststate );
   }
 
 };
@@ -173,7 +177,7 @@ game_core.prototype.server_update_physics = function() {
     var input_vectors = this.process_input(player);
     player.pos = this.v_add( player.old_state.pos, input_vectors.move );
 
-    player.old_state.cannon = player.cannon;
+    player.old_state.cannon = this.cannon( player.cannon );
     player.cannon = this.a_add( player.old_state.cannon, input_vectors.cannon );
 
     player.inputs = [];
@@ -235,7 +239,7 @@ game_core.prototype.process_input = function( player ) {
 
       //we have a direction vector now, so apply the same physics as the client
   var move_vector = move_dir * (this.playerspeed * 0.015).fixed(3);
-  var cannon_vector = cannon_dir * (this.playerspeed * 0.015).fixed(3);
+  var cannon_vector = cannon_dir * ((this.playerspeed / 100) * 0.015 / Math.PI).fixed(3); // Math.PI ~= 3 = demi-tour
 
   if (player.inputs.length) {
     player.last_input_time = player.inputs[ic-1].time;
@@ -288,6 +292,7 @@ game_core.prototype.client_connect_to_server = function () {
 
   this.socket = socket;
 
+  this.socket.on('gameready', this.client_onreadygame.bind(this));
   this.socket.on('serverupdate', this.client_onserverupdate_received.bind(this));
   this.socket.on('ping', this.client_onping.bind(this));
 
@@ -340,42 +345,44 @@ game_core.prototype.client_process_net_prediction_correction = function () {
   var latest_server_data = this.server_updates[this.server_updates.length-1];
 
     //Our latest server position
-  var my_server_pos = latest_server_data.pp[ localStorage.getItem('userid') ].pos;
+  var my_server_state = latest_server_data.pp[ localStorage.getItem('userid') ];
+  this.players.self.cur_state.pos = this.pos(my_server_state.pos);
+  this.players.self.cur_state.cannon = this.cannon(my_server_state.cannon);
 
           //here we handle our local input prediction
           //by correcting it with the server and reconciling its differences
 
-    var my_last_input_on_server = latest_server_data.is[ localStorage.getItem('userid') ];
-    if(my_last_input_on_server) {
-            //The last input sequence index in my local input list
-      var lastinputseq_index = -1;
-          //Find this input in the list, and store the index
-      for(var i = 0; i < this.players.self.inputs.length; ++i) {
-        if(this.players.self.inputs[i].seq == my_last_input_on_server) {
-          lastinputseq_index = i;
-          break;
-        }
+  var my_last_input_on_server = latest_server_data.is[ localStorage.getItem('userid') ];
+
+  if (my_last_input_on_server) {
+          //The last input sequence index in my local input list
+    var lastinputseq_index = -1;
+        //Find this input in the list, and store the index
+    for(var i = 0; i < this.players.self.inputs.length; ++i) {
+      if(this.players.self.inputs[i].seq == my_last_input_on_server) {
+        lastinputseq_index = i;
+        break;
       }
+    }
 
-          //Now we can crop the list of any updates we have already processed
-      if(lastinputseq_index != -1) {
-        //so we have now gotten an acknowledgement from the server that our inputs here have been accepted
-        //and that we can predict from this known position instead
+      //Now we can crop the list of any updates we have already processed
+    if (lastinputseq_index != -1) {
+      //so we have now gotten an acknowledgement from the server that our inputs here have been accepted
+      //and that we can predict from this known position instead
 
-            //remove the rest of the inputs we have confirmed on the server
-        var number_to_clear = Math.abs(lastinputseq_index - (-1));
-        this.players.self.inputs.splice(0, number_to_clear);
-            //The player is now located at the new server position, authoritive server
-        this.players.self.cur_state.pos = this.pos(my_server_pos);
-        this.players.self.last_input_seq = lastinputseq_index;
-            //Now we reapply all the inputs that we have locally that
-            //the server hasn't yet confirmed. This will 'keep' our position the same,
-            //but also confirm the server position at the same time.
-        this.client_update_physics();
-        this.client_update_local_position();
+          //remove the rest of the inputs we have confirmed on the server
+      var number_to_clear = Math.abs(lastinputseq_index - (-1));
+      this.players.self.inputs.splice(0, number_to_clear);
+          //The player is now located at the new server position, authoritive server
+      this.players.self.last_input_seq = lastinputseq_index;
+          //Now we reapply all the inputs that we have locally that
+          //the server hasn't yet confirmed. This will 'keep' our position the same,
+          //but also confirm the server position at the same time.
+      this.client_update_physics();
+      this.client_update_local_position();
 
-      } // if(lastinputseq_index != -1)
-    } //if my_last_input_on_server
+    } // if(lastinputseq_index != -1)
+  } //if my_last_input_on_server
 
 };
 
@@ -430,11 +437,12 @@ game_core.prototype.client_update_local_position = function () {
     var t = (this.local_time - this.players.self.state_time) / this._pdt;
 
       //Then store the states for clarity,
-    var old_state = this.players.self.old_state.pos;
-    var current_state = this.players.self.cur_state.pos;
+    var old_state = this.players.self.old_state;
+    var current_state = this.players.self.cur_state;
 
       //Make sure the visual position matches the states we have stored
-    this.players.self.pos = current_state;
+    this.players.self.pos = current_state.pos;
+    this.players.self.cannon = current_state.cannon;
 
       //We handle collision on client if predicting.
     this.check_collision( this.players.self );
@@ -451,15 +459,21 @@ game_core.prototype.client_update_physics = function () {
   if(this.client_predict) {
 
     this.players.self.old_state.pos = this.pos( this.players.self.cur_state.pos );
+    this.players.self.old_state.cannon = this.cannon( this.players.self.cur_state.cannon );
+
+    // new directions
     var nd = this.process_input(this.players.self);
+
     this.players.self.cur_state.pos = this.v_add( this.players.self.old_state.pos, nd.move);
+    this.players.self.cur_state.cannon = this.a_add( this.players.self.old_state.cannon, nd.cannon);
+
     this.players.self.state_time = this.local_time;
 
   }
 
 };
 
-game_core.prototype.client_handle_input = function(){
+game_core.prototype.client_handle_input = function () {
 
     //This takes input from the client and keeps a record,
     //It also sends the input information to the server immediately
@@ -523,15 +537,6 @@ game_core.prototype.client_handle_input = function(){
 
       //Go
     this.socket.emit( 'message', server_packet );
-
-      //Return the direction if needed
-    var move_vector = move_dir * (this.playerspeed * 0.015).fixed(3);
-    var cannon_vector = cannon_dir * (this.playerspeed * 0.015).fixed(3);
-    return { move: {x: move_vector, y: 0}, cannon: {angle: cannon_vector} };;
-
-  } else {
-
-    return { move: {x: 0, y: 0}, cannon: {angle: 0} };;
 
   }
 
@@ -603,10 +608,11 @@ game_core.prototype.client_process_net_updates = function () {
       }
     }
 
-    var other_target_pos = target.pp[ otherId ].pos;
-    var other_past_pos = previous.pp[ otherId ].pos;
+    var other_target_data = target.pp[ otherId ];
+    var other_past_data = previous.pp[ otherId ];
 
-    this.players[ '1' ].pos = this.v_lerp( this.players[ '1' ].pos, this.v_lerp(other_past_pos, other_target_pos, time_point), this._pdt*this.client_smooth);
+    this.players[ '1' ].pos = this.v_lerp( this.players[ '1' ].pos, this.v_lerp(other_past_data.pos, other_target_data.pos, time_point), this._pdt*this.client_smooth);
+    this.players[ '1' ].cannon = this.a_lerp( this.players[ '1' ].cannon, this.a_lerp(other_past_data.cannon, other_target_data.cannon, time_point), this._pdt*this.client_smooth);
 
   } //if target && previous
 
@@ -642,8 +648,8 @@ game_core.prototype.client_refresh_fps = function() {
 
 // player class
 var game_player = function ( game_instance, index, player_instance ) {
-      //Store the instance, if any
-  this.instance = player_instance;
+      //Store the client, if any
+  this.client = player_instance;
   this.game = game_instance;
 
       //Set up initial values for our state information
@@ -654,8 +660,8 @@ var game_player = function ( game_instance, index, player_instance ) {
   this.id = '';
 
       //These are used in moving us around later
-  this.old_state = {pos:{x:40,y:460}, cannon:{angle:0}};
-  this.cur_state = {pos:{x:40,y:460}, cannon:{angle:0}};
+  this.old_state = {pos: this.pos, cannon:{angle:0}};
+  this.cur_state = {pos: this.pos, cannon:{angle:0}};
   this.state_time = Date.now();
 
       //Our local history of inputs
@@ -671,12 +677,28 @@ var game_player = function ( game_instance, index, player_instance ) {
 
 }; //game_player.constructor
 
-game_player.prototype.draw = function(){
-
+game_player.prototype.draw = function () {
       //Set the color for this player
   game.ctx.fillStyle = this.color;
+  // game.ctx.fillRect(this.pos.x - this.size.hx, this.pos.y - this.size.hy, this.size.x, this.size.y);
 
-      //Draw a rectangle for us
-  game.ctx.fillRect(this.pos.x - this.size.hx, this.pos.y - this.size.hy, this.size.x, this.size.y);
+  game.ctx.beginPath();
+  game.ctx.fillStyle = this.color;
+  game.ctx.arc(this.pos.x, this.pos.y, this.size.hy * 2, Math.PI, 0);
+  game.ctx.fill();
+
+  // canon
+  game.ctx.beginPath();
+  game.ctx.fillStyle = 'white';
+  game.ctx.save();
+  game.ctx.translate(this.pos.x + 1, this.pos.y - this.size.hy);
+  game.ctx.rotate(Math.PI + (this.cannon.angle));
+  game.ctx.fillRect(0, 0, 2, this.size.hy*2);
+  game.ctx.restore();
+
+  // HP
+  // game.ctx.font = '10px Courier';
+  // game.ctx.fillStyle = 'white';
+  // game.ctx.fillText(p.health, p.x, (600 - (p.y - 10)));
 
 }; //game_player.draw

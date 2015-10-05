@@ -4,8 +4,10 @@ var game = {};
 
   //When loading, we store references to our
   //drawing canvases, and initiate a game instance.
-window.addEventListener('load', function () {
+socket.on('start', createGame);
+socket.on('resume', createGame);
 
+function createGame () {
     //Create our game client instance.
   game = new game_core();
 
@@ -25,4 +27,4 @@ window.addEventListener('load', function () {
     //Finally, start the loop
   game.update( Date.now() );
 
-}); //window.onload
+}

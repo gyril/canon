@@ -33,7 +33,7 @@ game_server.onMessage = function (client, message) {
 
     setTimeout(function(){
       if(game_server.messages.length) {
-        // game_server._onMessage( game_server.messages[0].client, game_server.messages[0].message );
+        game_server._onMessage( game_server.messages[0].client, game_server.messages[0].message );
         game_server.messages.splice(0,1);
       }
     }.bind(this), this.fake_latency);
@@ -76,20 +76,46 @@ game_server._onMessage = function (client, message) {
 
 game_server.createGame = function (clients) {
   var thegame = {
-                  id : UUID(),
-                  players: clients
+                  id : UUID()
                 };
 
   this.games[ thegame.id ] = thegame;
 
-  thegame.gamecore = new game_core( thegame );
+  thegame.gamecore = new game_core( thegame, clients );
   thegame.gamecore.update( Date.now() );
 
   for (var i in clients) {
     var client = clients[i];
     client.game = thegame;
-    client.send('s.r.'+ String(thegame.gamecore.local_time).replace('.','-'))
+    client.emit('gameready', String(thegame.gamecore.local_time).replace('.','-'));
   }
 
   console.log('Game instance started at', thegame.gamecore.local_time);
+};
+
+game_server.reconnect = function (client) {
+  client.emit('resume');
+
+  var thegame = game_server.getGameFromUser(client.userid);
+  thegame.gamecore.players[ client.userid ].client = client;
+  client.game = thegame;
+  client.emit('gameready', String(thegame.gamecore.local_time).replace('.','-'));
+
+  console.log(client.name, 'rejoined game', thegame.id);
+};
+
+game_server.isUserInGame = function (client) {
+  return !!game_server.getGameFromUser(client.userid);
+};
+
+game_server.getGameFromUser = function (userid) {
+  for (var i in this.games) {
+    for (var id in this.games[i].gamecore.players) {
+      if (id == userid) {
+        return this.games[i];
+      }
+    }
+  }
+
+  return  null;
 };

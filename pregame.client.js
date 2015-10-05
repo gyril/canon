@@ -141,6 +141,11 @@ window.addEventListener('load', function () {
     pregame.messages.scrollTop = pregame.messages.scrollHeight;
   });
 
+  socket.on('resume', function () {
+    pregame.hideView('loading');
+    pregame.showView('game');
+  });
+
   socket.on('start', function () {
     pregame.hideView('join-game');
     pregame.showView('game');

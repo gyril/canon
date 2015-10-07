@@ -280,75 +280,6 @@ game_core.prototype.update_physics = function() {
     var player = this.players[i];
     this.check_collision( player );
   }
-
-  // if(this.server) {
-  //   this.server_update_physics();
-  // } else {
-  //   this.client_update_physics();
-  // }
-
-};
-
-game_core.prototype.server_update_physics = function() {
-
-  // one loop to update positions
-  for (var i in this.players) {
-    var player = this.players[i];
-
-    // state what was the last actual position
-    player.old_state.pos = this.pos( player.pos );
-    player.old_state.acc = this.pos( player.acc );
-    player.old_state.cannon = this.cannon( player.cannon );
-
-    // generate a vector from buffered inputs
-    var input_vectors = this.process_input(player);
-    // update the downard acceleration due to gravity
-    player.acc = this.v_add( player.old_state.acc, this.v_mul_scalar({x:0, y: 100}, 0.015) );
-    // add acceleration to current position
-    var gravity_vector = this.v_add( player.old_state.pos, this.v_mul_scalar(player.acc, 0.015) )
-    // add the vector from inputs to it all
-    player.pos = this.v_add( gravity_vector, input_vectors.move );
-    // update the cannon based on inputs
-    player.cannon = this.a_add( player.old_state.cannon, input_vectors.cannon );
-
-
-    if (input_vectors.fire && !this.bullets[ '0' ]) {
-      this.bullets[ '0' ] = new game_bullet(player);
-    }
-
-    // inputs have been processed, clear buffer
-    player.inputs = [];
-  }
-
-  for (var i in this.bullets) {
-    var bullet = this.bullets[i];
-    // gravity (acc update)
-    bullet.acc = this.v_add( bullet.acc, this.v_mul_scalar({x:0, y: 100}, 0.015) );
-    // gravity (pos update)
-    bullet.pos = this.v_add( bullet.pos, this.v_mul_scalar(bullet.acc, 0.015) );
-
-    for (var j in this.players) {
-      var player = this.players[j];
-      if (player.pos.x - player.size.x / 2 < bullet.pos.x + bullet.size / 2 &&
-          player.pos.x + player.size.x / 2 > bullet.pos.x + bullet.size / 2 &&
-          player.pos.y - player.size.y / 2 < bullet.pos.y + bullet.size / 2 &&
-          player.pos.y + player.size.y / 2 > bullet.pos.y + bullet.size / 2) {
-        player.health -= 100;
-        delete this.bullets[ i ];
-      }
-    }
-
-    if (bullet.pos.y > this.ground_level(bullet.pos.x)) {
-      delete this.bullets[ i ];
-    }
-  }
-
-  // one loop to check collisions
-  for (var i in this.players) {
-    var player = this.players[i];
-    this.check_collision( player );
-  }
-
 };
 
 game_core.prototype.check_collision = function( item ) {
@@ -554,7 +485,7 @@ game_core.prototype.client_process_net_prediction_correction = function () {
           //Now we reapply all the inputs that we have locally that
           //the server hasn't yet confirmed. This will 'keep' our position the same,
           //but also confirm the server position at the same time.
-      this.client_update_physics();
+      this.update_physics();
       this.client_update_local_position();
 
     } // if(lastinputseq_index != -1)
@@ -630,51 +561,6 @@ game_core.prototype.client_update_local_position = function () {
 
     //We handle collision on client if predicting.
   this.check_collision( this.players.self );
-
-};
-
-game_core.prototype.client_update_physics = function () {
-
-  //Fetch the new direction from the input buffer,
-  //and apply it to the state so we can smooth it in the visual state
-
-  this.players.self.old_state.pos = this.pos( this.players.self.cur_state.pos );
-  this.players.self.old_state.cannon = this.cannon( this.players.self.cur_state.cannon );
-
-  // new directions
-  var nd = this.process_input(this.players.self);
-
-  this.players.self.cur_state.pos = this.v_add( this.players.self.old_state.pos, nd.move);
-  this.players.self.cur_state.cannon = this.a_add( this.players.self.old_state.cannon, nd.cannon);
-
-  if (nd.fire && !this.bullets[ '0' ]) {
-    this.bullets[ '0' ] = new game_bullet(this.players.self);
-  }
-
-  this.players.self.state_time = this.local_time;
-
-  for (var i in this.bullets) {
-    var bullet = this.bullets[i];
-    // gravity (acc update)
-    bullet.acc = this.v_add( bullet.acc, this.v_mul_scalar({x:0, y: 100}, 0.015) );
-    // gravity (pos update)
-    bullet.pos = this.v_add( bullet.pos, this.v_mul_scalar(bullet.acc, 0.015) );
-
-    for (var j in this.players) {
-      var player = this.players[j];
-      if (player.pos.x - player.size.x / 2 < bullet.pos.x + bullet.size / 2 &&
-          player.pos.x + player.size.x / 2 > bullet.pos.x + bullet.size / 2 &&
-          player.pos.y - player.size.y / 2 < bullet.pos.y + bullet.size / 2 &&
-          player.pos.y + player.size.y / 2 > bullet.pos.y + bullet.size / 2) {
-        player.health -= 100;
-        delete this.bullets[ i ];
-      }
-    }
-
-    if (bullet.pos.y > this.ground_level(bullet.pos.x)) {
-      delete this.bullets[ i ];
-    }
-  }
 
 };
 
@@ -824,8 +710,8 @@ game_core.prototype.client_process_net_updates = function () {
     var other_target_data = target.pp[ otherId ];
     var other_past_data = previous.pp[ otherId ];
 
-    this.players[ '1' ].pos = this.v_lerp( this.players[ '1' ].pos, this.v_lerp(other_past_data.pos, other_target_data.pos, time_point), this._pdt*this.client_smooth);
-    this.players[ '1' ].cannon = this.a_lerp( this.players[ '1' ].cannon, this.a_lerp(other_past_data.cannon, other_target_data.cannon, time_point), this._pdt*this.client_smooth);
+    this.players[ '1' ].pos = this.v_lerp(other_past_data.pos, other_target_data.pos, this._pdt*this.client_smooth);
+    this.players[ '1' ].cannon = this.a_lerp(other_past_data.cannon, other_target_data.cannon, this._pdt*this.client_smooth);
 
   } //if target && previous
 

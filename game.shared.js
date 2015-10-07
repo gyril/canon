@@ -846,6 +846,8 @@ game_player.prototype.drawHUD = function () {
   game.ctx.font = '18px Courier';
   game.ctx.fillStyle = this.color;
   game.ctx.fillText(Math.round(this.cannon.angle * 180 / Math.PI) + '°', 10, 20);
+  game.ctx.fillText(Math.round(game.fps_avg), 10, 40);
+  game.ctx.fillText(game.net_ping, 10, 60);
 };
 
 // bullet class

@@ -101,7 +101,7 @@ game_server.reconnect = function (client) {
   client.game = thegame;
   client.emit('gameready', String(thegame.gamecore.local_time).replace('.','-'));
 
-  console.log(client.name, 'rejoined game', thegame.id);
+  console.log(client.userid, 'rejoined game', thegame.id);
 };
 
 game_server.isUserInGame = function (client) {

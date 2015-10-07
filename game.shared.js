@@ -11,6 +11,24 @@ var game_core = function (id, clients) {
     height : 480
   };
 
+  this.ground = 400;
+
+  this.terrain = {};
+  this.terrain.points = this.generate_terrain(this.world.width, this.world.height, this.world.height/2, 0.5);
+  this.terrain.draw = function () {
+    game.ctx.beginPath();
+    game.ctx.fillStyle = 'white';
+    game.ctx.moveTo(0, this.points[0]);
+    for (var t = 1; t < this.points.length; t++) {
+      game.ctx.lineTo(t, this.points[t]);
+    }
+    // finish creating the rect so we can fill it
+    game.ctx.lineTo(game.viewport.width, game.viewport.height);
+    game.ctx.lineTo(0, game.viewport.height);
+    game.ctx.closePath();
+    game.ctx.fill();
+  };
+
   this.players = {};
 
   if(this.server) {
@@ -27,7 +45,9 @@ var game_core = function (id, clients) {
 
   }
 
-  this.playerspeed = 120;
+  this.bullets = [];
+
+  this.playerspeed = 80;
 
   // physics
   this._pdt = 0.0001;                 //The physics update delta time
@@ -73,10 +93,38 @@ var game_core = function (id, clients) {
 }; //game_core.constructor
 
 //server side we set the 'game_core' class to a global type, so that it can use it anywhere.
-if( 'undefined' != typeof global ) {
-    module.exports = global.game_core = game_core;
+if ( 'undefined' != typeof global ) {
+  module.exports = global.game_core = game_core;
 }
 
+game_core.prototype.generate_terrain = function (width, height, displace, roughness) {
+  var points = [];
+
+  for (var i = 0; i < width; i++) {
+    points[i] = this.ground;
+  }
+  // var points = [],
+  //     // Gives us a power of 2 based on our width
+  //     power = Math.pow(2, Math.ceil(Math.log(width) / (Math.log(2))));
+
+  // // Set the initial left point
+  // points[0] = height - 50;
+  // // set the initial right point
+  // points[power] = height - 50;
+  // displace *= roughness;
+
+  // // Increase the number of segments
+  // for(var i = 1; i < power; i *=2){
+  //   // Iterate through each segment calculating the center point
+  //   for(var j = (power/i)/2; j < power; j+= power/i){
+  //     points[j] = ((points[j - (power / i) / 2] + points[j + (power / i) / 2]) / 2);
+  //     points[j] += (Math.random()*displace*2) - displace
+  //   }
+  //   // reduce our random range
+  //   displace *= roughness;
+  // }
+  return points;
+};
 
 // helpers
 Number.prototype.fixed = function(n) { n = n || 3; return parseFloat(this.toFixed(n)); };
@@ -173,14 +221,44 @@ game_core.prototype.server_update_physics = function() {
   // one loop to update positions
   for (var i in this.players) {
     var player = this.players[i];
-    player.old_state.pos = this.pos( player.pos );
-    var input_vectors = this.process_input(player);
-    player.pos = this.v_add( player.old_state.pos, input_vectors.move );
 
+    // state what was the last actual position
+    player.old_state.pos = this.pos( player.pos );
+    player.old_state.acc = this.pos( player.acc );
     player.old_state.cannon = this.cannon( player.cannon );
+
+    // generate a vector from buffered inputs
+    var input_vectors = this.process_input(player);
+    // update the downard acceleration due to gravity
+    player.acc = this.v_add( player.old_state.acc, this.v_mul_scalar({x:0, y: 100}, 0.015) );
+    // add acceleration to current position
+    var gravity_vector = this.v_add( player.old_state.pos, this.v_mul_scalar(player.acc, 0.015) )
+    // add the vector from inputs to it all
+    player.pos = this.v_add( gravity_vector, input_vectors.move );
+    // update the cannon based on inputs
     player.cannon = this.a_add( player.old_state.cannon, input_vectors.cannon );
 
+
+    if (input_vectors.fire) {
+      this.bullets.push(new game_bullet(player));
+      if (this.bullets.length > 100) {
+        this.bullets.splice(0, 1);
+      }
+    }
+
+    // inputs have been processed, clear buffer
     player.inputs = [];
+  }
+
+  for (var i = 0; i < this.bullets.length; i++) {
+    var bullet = this.bullets[i];
+    // gravity (acc update)
+    bullet.acc = this.v_add( bullet.acc, this.v_mul_scalar({x:0, y: 100}, 0.015) );
+    // gravity (pos update)
+    bullet.pos = this.v_add( bullet.pos, this.v_mul_scalar(bullet.acc, 0.015) );
+    if (bullet.pos.y > this.ground_level(bullet.pos.x)) {
+      this.bullets.splice(i, 1);
+    }
   }
 
   // one loop to check collisions
@@ -193,9 +271,10 @@ game_core.prototype.server_update_physics = function() {
 
 game_core.prototype.check_collision = function( item ) {
 
-    //Floor wall
-  if(item.pos.y >= item.pos_limits.y_max ) {
-    item.pos.y = item.pos_limits.y_max;
+    //Floor
+  if(item.pos.y >= this.ground_level(item.pos.x) ) {
+    item.pos.y = this.ground_level(item.pos.x);
+    item.acc.y = 0;
   }
 
     //Fixed point helps be more deterministic
@@ -204,12 +283,18 @@ game_core.prototype.check_collision = function( item ) {
 
 };
 
+game_core.prototype.ground_level = function (x) {
+  return this.ground;
+}
+
 game_core.prototype.process_input = function( player ) {
 
   //It's possible to have recieved multiple inputs by now,
   //so we process each one
   var move_dir = 0;
   var cannon_dir = 0;
+  var fire = false;
+
   var ic = player.inputs.length;
   if (ic) {
     for (var j = 0; j < ic; ++j) {
@@ -232,6 +317,9 @@ game_core.prototype.process_input = function( player ) {
         if(key == 'u') {
           cannon_dir -= 1;
         }
+        if(key == 'f') {
+          fire = true;
+        }
       } //for all input values
 
     } //for each input command
@@ -239,7 +327,7 @@ game_core.prototype.process_input = function( player ) {
 
       //we have a direction vector now, so apply the same physics as the client
   var move_vector = move_dir * (this.playerspeed * 0.015).fixed(3);
-  var cannon_vector = cannon_dir * ((this.playerspeed / 100) * 0.015 / Math.PI).fixed(3); // Math.PI ~= 3 = demi-tour
+  var cannon_vector = cannon_dir * ((this.playerspeed / 50) * 0.015 / Math.PI).fixed(3); // Math.PI = demi-tour
 
   if (player.inputs.length) {
     player.last_input_time = player.inputs[ic-1].time;
@@ -247,7 +335,7 @@ game_core.prototype.process_input = function( player ) {
   }
 
       //give it back
-  return { move: {x: move_vector, y: 0}, cannon: {angle: cannon_vector} };
+  return { move: {x: move_vector, y: 0}, cannon: {angle: cannon_vector}, fire: fire };
 };
 
 game_core.prototype.server_handle_input = function (client, input, input_time, input_seq) {
@@ -414,6 +502,10 @@ game_core.prototype.client_update = function () {
     this.client_process_net_updates();
   }
 
+  // draw terrain
+  this.terrain.draw();
+
+
       //Now they should have updated, we can draw the entity
   this.players[ '1' ].draw();
 
@@ -424,6 +516,10 @@ game_core.prototype.client_update = function () {
       //And then we finally draw
   this.players.self.draw();
 
+  // draw bullets
+  for (var i = 0; i < this.bullets.length; i++) {
+    this.bullets[i].draw();
+  }
       //Work out the fps average
   this.client_refresh_fps();
 
@@ -467,7 +563,22 @@ game_core.prototype.client_update_physics = function () {
     this.players.self.cur_state.pos = this.v_add( this.players.self.old_state.pos, nd.move);
     this.players.self.cur_state.cannon = this.a_add( this.players.self.old_state.cannon, nd.cannon);
 
+    if (nd.fire) {
+      this.bullets.push(new game_bullet(this.players.self));
+    }
+
     this.players.self.state_time = this.local_time;
+
+    for (var i = 0; i < this.bullets.length; i++) {
+      var bullet = this.bullets[i];
+      // gravity (acc update)
+      bullet.acc = this.v_add( bullet.acc, this.v_mul_scalar({x:0, y: 100}, 0.015) );
+      // gravity (pos update)
+      bullet.pos = this.v_add( bullet.pos, this.v_mul_scalar(bullet.acc, 0.015) );
+      if (bullet.pos.y > this.ground_level(bullet.pos.x)) {
+        this.bullets.splice(i, 1);
+      }
+    }
 
   }
 
@@ -481,6 +592,7 @@ game_core.prototype.client_handle_input = function () {
 
   var move_dir = 0;
   var cannon_dir = 0;
+  var fire = false;
   var input = [];
   this.client_has_input = false;
 
@@ -515,6 +627,13 @@ game_core.prototype.client_handle_input = function () {
       input.push('u');
 
     } //up
+
+  if ( this.keyboard.pressed('space')) {
+
+      fire = true;
+      input.push('f');
+
+    } //fire
 
   if (input.length) {
 
@@ -653,47 +772,35 @@ var game_player = function ( game_instance, index, player_instance ) {
   this.game = game_instance;
 
       //Set up initial values for our state information
-  this.pos = { x:40 + index * (720 - 40 * 2 - 8), y:460 };
+  this.pos = { x:40 + index * (720 - 40 * 2 - 8), y: 260 };
+  this.acc = {x:0, y: 0};
   this.cannon = { angle:0 };
-  this.size = { x:16, y:16, hx:8, hy:8 };
+  this.size = { x:20, y:20 };
   this.color = this.game.colors[ index ];
   this.id = '';
 
       //These are used in moving us around later
-  this.old_state = {pos: this.pos, cannon:{angle:0}};
-  this.cur_state = {pos: this.pos, cannon:{angle:0}};
+  this.old_state = {pos: this.pos, cannon: this.cannon, acc: this.acc};
+  this.cur_state = {pos: this.pos, cannon: this.cannon, acc: this.acc};
   this.state_time = Date.now();
 
       //Our local history of inputs
   this.inputs = [];
-
-      //The world bounds we are confined to
-  this.pos_limits = {
-    x_min: this.size.hx,
-    x_max: this.game.world.width - this.size.hx,
-    y_min: this.size.hy,
-    y_max: this.game.world.height - this.size.hy
-  };
-
 }; //game_player.constructor
 
 game_player.prototype.draw = function () {
-      //Set the color for this player
-  game.ctx.fillStyle = this.color;
-  // game.ctx.fillRect(this.pos.x - this.size.hx, this.pos.y - this.size.hy, this.size.x, this.size.y);
-
   game.ctx.beginPath();
   game.ctx.fillStyle = this.color;
-  game.ctx.arc(this.pos.x, this.pos.y, this.size.hy * 2, Math.PI, 0);
+  game.ctx.arc(this.pos.x, this.pos.y, this.size.y / 2, Math.PI, 0);
   game.ctx.fill();
 
   // canon
   game.ctx.beginPath();
   game.ctx.fillStyle = 'white';
   game.ctx.save();
-  game.ctx.translate(this.pos.x + 1, this.pos.y - this.size.hy);
+  game.ctx.translate(this.pos.x + 1, this.pos.y - this.size.y / 4);
   game.ctx.rotate(Math.PI + (this.cannon.angle));
-  game.ctx.fillRect(0, 0, 2, this.size.hy*2);
+  game.ctx.fillRect(0, 0, 2, this.size.y / 2);
   game.ctx.restore();
 
   // HP
@@ -702,3 +809,20 @@ game_player.prototype.draw = function () {
   // game.ctx.fillText(p.health, p.x, (600 - (p.y - 10)));
 
 }; //game_player.draw
+
+// bullet class
+var game_bullet = function ( player ) {
+  function v_add (a,b) { return { x:(a.x+b.x).fixed(), y:(a.y+b.y).fixed() }; };
+  function to_cart (mag, theta) { return { x:(mag * Math.sin(theta)).fixed(), y:(-1 * mag * Math.cos(theta)).fixed() }; };
+
+  this.pos = v_add(v_add(player.pos, to_cart(player.size.y / 2, player.cannon.angle)), {x: 0, y: -player.size.y / 4});
+  this.acc = to_cart(200, player.cannon.angle);
+  this.size = 2;
+};
+
+game_bullet.prototype.draw = function () {
+  game.ctx.beginPath();
+  game.ctx.fillStyle = '#dedede';
+  game.ctx.arc(this.pos.x, this.pos.y, this.size, Math.PI * 2, 0);
+  game.ctx.fill();
+};

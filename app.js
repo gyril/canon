@@ -40,6 +40,7 @@ sio.on('connection', function (client) {
     client.userid = id || uuid();
 
     if (game_server.isUserInGame(client)) {
+      // FIXME: how to reattach username to client?
       game_server.reconnect(client);
     } else {
       client.emit('initialized', { id: client.userid } );

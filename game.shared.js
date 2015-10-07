@@ -367,7 +367,7 @@ game_core.prototype.client_create_configuration = function () {
   this.net_ping = 0.001;              //The round trip time from here to the server,and back
   this.last_ping_time = 0.001;        //The time we last sent a ping
 
-  this.net_offset = 100;              //100 ms latency between server and client interpolation for other clients
+  this.net_offset = 500;              //100 ms latency between server and client interpolation for other clients
   this.buffer_size = 2;               //The size of the server history to keep for rewinding/interpolating.
   this.target_time = 0.01;            //the time where we want to be in the server timeline
   this.oldest_tick = 0.01;            //the last time tick we have available in the buffer

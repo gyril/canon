@@ -189,6 +189,7 @@ game_core.prototype.server_update = function(){
   this.laststate = {
     pp: _.object(_.map(this.players, function (player, userid) { return [userid, {pos: player.pos, cannon: player.cannon}]; })), // players positions
     is: _.object(_.map(this.players, function (player, userid) { return [userid, player.last_input_seq]; })), // players input sequences
+    bu: this.bullets,
     t : this.server_time
   };
 
@@ -239,11 +240,8 @@ game_core.prototype.server_update_physics = function() {
     player.cannon = this.a_add( player.old_state.cannon, input_vectors.cannon );
 
 
-    if (input_vectors.fire) {
+    if (input_vectors.fire && !this.bullets.length) {
       this.bullets.push(new game_bullet(player));
-      if (this.bullets.length > 100) {
-        this.bullets.splice(0, 1);
-      }
     }
 
     // inputs have been processed, clear buffer
@@ -256,6 +254,18 @@ game_core.prototype.server_update_physics = function() {
     bullet.acc = this.v_add( bullet.acc, this.v_mul_scalar({x:0, y: 100}, 0.015) );
     // gravity (pos update)
     bullet.pos = this.v_add( bullet.pos, this.v_mul_scalar(bullet.acc, 0.015) );
+
+    for (var j in this.players) {
+      var player = this.players[j];
+      if (player.pos.x - player.size.x / 2 < bullet.pos.x + bullet.size / 2 &&
+          player.pos.x + player.size.x / 2 > bullet.pos.x + bullet.size / 2 &&
+          player.pos.y - player.size.y / 2 < bullet.pos.y + bullet.size / 2 &&
+          player.pos.y + player.size.y / 2 > bullet.pos.y + bullet.size / 2) {
+        player.health -= 100;
+        this.bullets.splice(i, 1);
+      }
+    }
+
     if (bullet.pos.y > this.ground_level(bullet.pos.x)) {
       this.bullets.splice(i, 1);
     }
@@ -412,6 +422,13 @@ game_core.prototype.client_onserverupdate_received = function (data) {
     this.server_updates.splice(0,1);
   }
 
+  if (data.bu.length) {
+    var bullet = new game_bullet(this.players.self);
+    bullet.pos = data.bu[0].pos;
+    bullet.acc = data.bu[0].acc;
+    this.bullets = [bullet];
+  }
+
     //We can see when the last tick we know of happened.
     //If client_time gets behind this due to latency, a snap occurs
     //to the last tick. Unavoidable, and a reallly bad connection here.
@@ -520,9 +537,11 @@ game_core.prototype.client_update = function () {
   for (var i = 0; i < this.bullets.length; i++) {
     this.bullets[i].draw();
   }
+
+  this.players.self.drawHUD();
+
       //Work out the fps average
   this.client_refresh_fps();
-
 };
 
 game_core.prototype.client_update_local_position = function () {
@@ -563,7 +582,7 @@ game_core.prototype.client_update_physics = function () {
     this.players.self.cur_state.pos = this.v_add( this.players.self.old_state.pos, nd.move);
     this.players.self.cur_state.cannon = this.a_add( this.players.self.old_state.cannon, nd.cannon);
 
-    if (nd.fire) {
+    if (nd.fire && !this.bullets.length) {
       this.bullets.push(new game_bullet(this.players.self));
     }
 
@@ -575,6 +594,18 @@ game_core.prototype.client_update_physics = function () {
       bullet.acc = this.v_add( bullet.acc, this.v_mul_scalar({x:0, y: 100}, 0.015) );
       // gravity (pos update)
       bullet.pos = this.v_add( bullet.pos, this.v_mul_scalar(bullet.acc, 0.015) );
+
+      for (var j in this.players) {
+        var player = this.players[j];
+        if (player.pos.x - player.size.x / 2 < bullet.pos.x + bullet.size / 2 &&
+            player.pos.x + player.size.x / 2 > bullet.pos.x + bullet.size / 2 &&
+            player.pos.y - player.size.y / 2 < bullet.pos.y + bullet.size / 2 &&
+            player.pos.y + player.size.y / 2 > bullet.pos.y + bullet.size / 2) {
+          player.health -= 100;
+          this.bullets.splice(i, 1);
+        }
+      }
+
       if (bullet.pos.y > this.ground_level(bullet.pos.x)) {
         this.bullets.splice(i, 1);
       }
@@ -775,6 +806,7 @@ var game_player = function ( game_instance, index, player_instance ) {
   this.pos = { x:40 + index * (720 - 40 * 2 - 8), y: 260 };
   this.acc = {x:0, y: 0};
   this.cannon = { angle:0 };
+  this.health = 1000;
   this.size = { x:20, y:20 };
   this.color = this.game.colors[ index ];
   this.id = '';
@@ -804,11 +836,17 @@ game_player.prototype.draw = function () {
   game.ctx.restore();
 
   // HP
-  // game.ctx.font = '10px Courier';
-  // game.ctx.fillStyle = 'white';
-  // game.ctx.fillText(p.health, p.x, (600 - (p.y - 10)));
+  game.ctx.font = '10px Courier';
+  game.ctx.fillStyle = 'green';
+  game.ctx.fillText(this.health, this.pos.x, this.pos.y + 10);
 
 }; //game_player.draw
+
+game_player.prototype.drawHUD = function () {
+  game.ctx.font = '18px Courier';
+  game.ctx.fillStyle = this.color;
+  game.ctx.fillText(Math.round(this.cannon.angle * 180 / Math.PI) + '°', 10, 20);
+};
 
 // bullet class
 var game_bullet = function ( player ) {

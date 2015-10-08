@@ -104,10 +104,11 @@ game_core.prototype.update_physics = function (delta) {
     var player = this.sprites.players[ player_index ]
 
     // if server corrected the position of the client, apply it now
-    if (player.server_pos) {
-      console.log('server has us at:', player.server_pos);
-      player.pos = utils.pos( player.server_pos );
-      player.set_server_pos(null);
+    if (player.server_sent_update) {
+      console.log('server has us at:', player.server_data.pos);
+      player.pos = utils.pos( player.server_data.pos );
+      player.cannon = utils.cannon( player.server_data.cannon );
+      player.server_sent_update = false;;
     }
 
     this.process_input(player);
@@ -219,7 +220,9 @@ game_core.prototype.client_onserverupdate = function (data) {
     this.server_updates.splice(0,1);
   }
 
+  // correct potential discrepancies between client and server
   this.client_correct_local_position();
+  this.client_interpolate_sprites_positions();
 };
 
 game_core.prototype.client_correct_local_position = function () {
@@ -228,6 +231,7 @@ game_core.prototype.client_correct_local_position = function () {
 
   var latest_server_data = this.server_updates[this.server_updates.length-1];
   var my_server_state = latest_server_data.players_data[ this.local_player.player_index ];
+  this.local_player.set_server_data( my_server_state );
 
    //here we handle our local input prediction
   //by correcting it with the server and reconciling its differences
@@ -246,7 +250,7 @@ game_core.prototype.client_correct_local_position = function () {
   // else last update is still in our local inputs list: we remove everything before it and rewind
   if (lastinputseq_index != -1) {
      // authoritative answer from server will be the true position at next physics_update()
-    this.local_player.set_server_pos( my_server_state.pos );
+    this.local_player.server_sent_update = true;
 
     // tell the local client to replay inputs from where the server stopped
     this.local_player.last_input_seq = this.local_player.inputs[ lastinputseq_index ].seq;
@@ -254,6 +258,19 @@ game_core.prototype.client_correct_local_position = function () {
 
     var inputs_to_clear = (lastinputseq_index + 1);
     this.local_player.inputs.splice(0, inputs_to_clear);
+  }
+};
+
+game_core.prototype.client_interpolate_sprites_positions = function () {
+  var latest_server_data = this.server_updates[this.server_updates.length-1];
+
+  // for players other than local client's player
+  for (var i in this.sprites.players) {
+    var sprite = this.sprites.players[ i ];
+    if (sprite.userid != this.local_player.userid) {
+      sprite.pos = utils.pos( latest_server_data.players_data[ sprite.player_index ].pos );
+      sprite.cannon = utils.cannon( latest_server_data.players_data[ sprite.player_index ].cannon );
+    }
   }
 };
 
@@ -366,7 +383,8 @@ var game_player = function (game, index, client) {
 
   this.acc = {x: 0, y:0 };
   this.pos = {x: 120 + index * 480, y: 240};
-  this.server_pos = null;
+  this.server_sent_update = false;
+  this.server_data = null;
   this.size = {x: 10, y: 10};
   this.cannon = {angle: 0};
   this.speed = 80;
@@ -396,8 +414,8 @@ game_player.prototype.update_physics = function (delta) {
   }
 };
 
-game_player.prototype.set_server_pos = function (pos) {
-  this.server_pos = pos ? utils.pos( pos ) : null;
+game_player.prototype.set_server_data = function (data) {
+  this.server_data = {pos: data.pos, cannon: data.cannon};
 };
 
 game_player.prototype.draw = function (ctx) {
@@ -459,6 +477,7 @@ var utils = {
   pos: function (vector) { return {x: vector.x, y: vector.y}; },
   pos_sum: function (vect1, vect2) { return {x: (vect1.x + vect2.x).fixed(3), y: (vect1.y + vect2.y).fixed(3)}; },
   pos_scalar_mult: function (vector, factor) { return {x: (vector.x * factor).fixed(3), y: (vector.y * factor).fixed(3)}; },
+  cannon: function (vector) { return {angle: vector.angle}; },
   angle_sum: function (vect1, vect2) { return {angle: (vect1.angle + vect2.angle).fixed(3)}; },
   angle_scalar_mult: function (vector, factor) { return {angle: (vector.angle * factor).fixed(3)}; }
 }

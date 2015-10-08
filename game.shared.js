@@ -11,6 +11,36 @@ var game_core = function (id, clients) {
     height : 480
   };
 
+  /*
+  WIP
+  this.players_count = 2;
+
+  // generate terrain
+  this.terrain = new game_terrain(this.world);
+
+  // sprites are objects in the world
+  this.sprites = {
+    players: {}
+  };
+
+  // spawn players
+  for (var i = 0; i < this.players_count; i++) {
+    this.players[ i ] = new game_player(this, i);
+    if (this.server) {
+      this.players[ i ].client = _.map(clients, function (client) { return client; })[i];
+    }
+  }
+
+  // the clock
+  this.start_simple_timer();
+
+  // the physics loop starts here
+  this.start_physics_simulation();
+  */
+  /*
+  /WIP
+  */
+
   this.ground = 400;
 
   this.terrain = {};
@@ -548,10 +578,7 @@ game_core.prototype.client_update = function () {
 
 game_core.prototype.client_update_local_position = function () {
 
-    //Work out the time we have since we updated the state
-  var t = (this.local_time - this.players.self.state_time) / this._pdt;
-
-    //Then store the states for clarity,
+    // Store the states for clarity,
   var old_state = this.players.self.old_state;
   var current_state = this.players.self.cur_state;
 

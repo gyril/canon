@@ -4,7 +4,7 @@ var
 
 global.window = global.document = global;
 
-require('./game.shared.js');
+require('./game.core.js');
 
 game_server.log = function () {
   console.log.apply(this,arguments);
@@ -14,8 +14,7 @@ game_server.local_time = 0;
 game_server._dt = new Date().getTime();
 game_server._dte = new Date().getTime();
 
-// FIXME: looks like it's not working
-game_server.fake_latency = 0;
+game_server.fake_latency = 2000;
 game_server.messages = [];
 
 setInterval(function(){
@@ -26,7 +25,7 @@ setInterval(function(){
 
 game_server.onMessage = function (client, message) {
 
-  if(this.fake_latency && message.split('.')[0].substr(0,1) == 'i') {
+  if(this.fake_latency && message.split('.')[0] == 'i') {
 
         //store all input message
     game_server.messages.push({client:client, message:message});
@@ -82,12 +81,10 @@ game_server.createGame = function (clients) {
   this.games[ thegame.id ] = thegame;
 
   thegame.gamecore = new game_core( thegame, clients );
-  thegame.gamecore.update( Date.now() );
 
   for (var i in clients) {
     var client = clients[i];
     client.game = thegame;
-    client.emit('gameready', String(thegame.gamecore.local_time).replace('.','-'));
   }
 
   console.log('Game instance started at', thegame.gamecore.local_time);
@@ -99,7 +96,6 @@ game_server.reconnect = function (client) {
   var thegame = game_server.getGameFromUser(client.userid);
   thegame.gamecore.players[ client.userid ].client = client;
   client.game = thegame;
-  client.emit('gameready', String(thegame.gamecore.local_time).replace('.','-'));
 
   console.log(client.userid, 'rejoined game', thegame.id);
 };

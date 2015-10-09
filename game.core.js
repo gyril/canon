@@ -20,6 +20,10 @@ var game_core = function (server, clients) {
   };
 
   this.sprites = {'players': {}, 'ammo': {}};
+  this.last_sprite_id = 0;
+
+  this.animations = {};
+  this.last_animation_id = 0;
 
   if (this.server) {
     this.clients = clients;
@@ -58,6 +62,7 @@ var game_core = function (server, clients) {
     this.socket.on('first_sync', this.client_first_sync_from_server.bind(this));
     this.socket.on('server_update', this.client_on_server_update.bind(this));
     this.socket.on('next_round', this.client_on_next_round.bind(this));
+    this.socket.on('shot_sync', this.client_on_shot_sync.bind(this));
     this.socket.on('ping', this.client_onping.bind(this));
 
     // listen to keyboard inputs
@@ -139,6 +144,11 @@ game_core.prototype.update_physics = function (delta) {
           var player = this.sprites.players[ player_index ];
           this.process_input(player);
         }
+
+        // player fired! end round, compute trajectory and damage
+        if (player.inputs_vector.fire) {
+          this.player_fired(player);
+        }
       }
 
       // then update the physics and check collisions
@@ -165,6 +175,11 @@ game_core.prototype.update_physics = function (delta) {
     this.process_input(player);
     player.update_physics(delta);
 
+    // update the ammo physics
+    for (var i in this.sprites.ammo) {
+      this.sprites.ammo[i].update_physics(delta);
+    }
+
   }
 
 };
@@ -176,9 +191,10 @@ game_core.prototype.process_input = function (player) {
   // iterate over all the inputs stored
   for (var j = 0; j < player.inputs.length; j++) {
     // if this input was sent after round for this player ended, discard inputs after it
-    if (player.player_index != this.round_player_index && player.inputs[j].time > this.round_start_time) {
-      break;
-    }
+    if (player.player_index != this.round_player_index && player.inputs[j].time > this.round_start_time) break;
+
+    // if this input was sent before round for this player started, skip it
+    if (player.player_index == this.round_player_index && player.inputs[j].time <= this.round_start_time) continue;
 
     // if this input from the local buffer has already been processed, skip it
     if (player.inputs[j].seq <= player.last_input_seq) continue;
@@ -375,9 +391,31 @@ game_core.prototype.client_interpolate_sprites_positions = function () {
 };
 
 game_core.prototype.client_on_next_round = function (data) {
+  // TODO? could add a timer to make sure this is applied in sync with server_time
   this.round = data.round;
   this.round_start_time = data.round_start_time;
   this.round_player_index = data.round_player_index;
+};
+
+game_core.prototype.player_fired = function (player) {
+  console.log('BOOM');
+  clearTimeout(this.round_id);
+  var ammo = new game_ammo(this, player, 300);
+  this.sprites.ammo[ ++this.last_sprite_id ] = ammo;
+
+  // tell the clients to stop round, display fire
+  for (var i in this.clients) {
+    this.clients[ i ].emit('shot_sync', {ammo: {pos: ammo.pos, acc: ammo.acc}});
+  }
+};
+
+game_core.prototype.client_on_shot_sync = function (shot_data) {
+  // small hack: instantiate it to the local_player
+  var ammo = new game_ammo(this, this.local_player, 300);
+  ammo.pos = shot_data.ammo.pos;
+  ammo.acc = shot_data.ammo.acc;
+
+  this.sprites.ammo[ ++this.last_sprite_id ] = ammo;
 };
 
 game_core.prototype.client_onping = function (data) {
@@ -409,7 +447,7 @@ game_core.prototype.client_draw_frame = function () {
     for (var j in this.sprites[ sprite_type ]) {
       var sprite = this.sprites[ sprite_type ][ j ];
       // don't paint the local client just yet
-      if (sprite_type == 'players' && j != this.local_player.player_index) {
+      if (sprite_type != 'players' || j != this.local_player.player_index) {
         sprite.draw(ctx);
       }
     }
@@ -417,6 +455,13 @@ game_core.prototype.client_draw_frame = function () {
 
   // paint the local client on top of every other sprite
   this.local_player.draw(ctx);
+
+  // draw animations on top of sprites
+  for (var i in this.animations) {
+    var animation = this.animations[i];
+    animation.draw(ctx);
+    animation.update();
+  }
 
   // paint the HUD on top of everything
   this.drawHUD(ctx);
@@ -485,7 +530,7 @@ game_core.prototype.drawHUD = function (ctx) {
   ctx.font = '14px Courier';
   ctx.fillStyle = this.local_player.color;
   ctx.fillText(this.net_ping + ' ping', 10, 20);
-  ctx.fillText(Math.round(this.local_player.cannon.angle * 180 / Math.PI) + '°', 10, 35);
+  ctx.fillText(Math.round(90 - this.local_player.cannon.angle) + '°', 10, 35);
   ctx.fillText('Round ' + this.round, 10, 50);
   ctx.fillText(Math.round(this.config.round_duration - (this.local_time - this.round_start_time)), 10, 65);
 };
@@ -512,7 +557,7 @@ var game_player = function (game, index, client) {
   this.server_sent_update = false;
   this.server_data = null;
   this.size = {x: 10, y: 10};
-  this.cannon = {angle: 0};
+  this.cannon = {angle: 90};
   this.speed = 80;
   this.health = 1000;
   this.color = this.game.config.colors[ this.player_index ];
@@ -525,7 +570,7 @@ var game_player = function (game, index, client) {
 game_player.prototype.update_physics = function (delta) {
   // account for inputs vector
   this.pos = utils.pos_sum(this.pos, utils.pos_scalar_mult(this.inputs_vector.pos, (this.speed * delta).fixed(3)));
-  this.cannon = utils.angle_sum(this.cannon, utils.angle_scalar_mult(this.inputs_vector.cannon, (2 * delta / Math.PI).fixed(3)));
+  this.cannon = utils.angle_sum(this.cannon, utils.angle_scalar_mult(this.inputs_vector.cannon, (20 * delta).fixed(3)));
 
   // apply gravity to the current acceleration
   this.acc = utils.pos_sum(this.acc, utils.pos_scalar_mult(this.game.config.gravity_vector, delta));
@@ -538,6 +583,17 @@ game_player.prototype.update_physics = function (delta) {
     this.pos.y = (this.game.terrain.ground_level_at_x(this.pos.x)).fixed(3);
     this.acc.y = 0;
   }
+};
+
+game_player.prototype.take_damage = function (damage) {
+  this.health -= damage.fixed(0);
+  if (this.health <= 0) {
+    this.die();
+  }
+};
+
+game_player.prototype.die = function () {
+  console.log('PLAYER IS DEAD');
 };
 
 game_player.prototype.set_server_data = function (data) {
@@ -556,7 +612,7 @@ game_player.prototype.draw = function (ctx) {
   ctx.fillStyle = 'white';
   ctx.save();
   ctx.translate(this.pos.x + 1, this.pos.y - this.size.y / 2);
-  ctx.rotate(Math.PI + (this.cannon.angle));
+  ctx.rotate(utils.to_radians( 270 - this.cannon.angle ));
   ctx.fillRect(0, 0, 2, this.size.y);
   ctx.restore();
 
@@ -582,7 +638,12 @@ game_terrain.prototype.ground_level_at_x = function (x) {
 
 game_terrain.prototype.draw = function (ctx) {
   ctx.beginPath();
-  ctx.fillStyle = 'white';
+
+  var gradient = ctx.createLinearGradient(0, this.world.height, 0, this.ground_level_at_x(0));
+  gradient.addColorStop(0, '#c18e00');
+  gradient.addColorStop(1, '#703b00');
+  ctx.fillStyle = gradient;
+
   ctx.moveTo(0, this.ground_level_at_x(0));
   game.ctx.lineTo(this.world.width, this.ground_level_at_x(this.world.width));
   // finish creating the rect so we can fill it
@@ -594,6 +655,122 @@ game_terrain.prototype.draw = function (ctx) {
 
 
 /***
+* Ammo class
+***/
+
+var game_ammo = function (game, player, power) {
+  this.game = game;
+
+  this.pos = utils.pos_sum( utils.pos_sum(player.pos, {x: 1, y: -1* player.size.y / 2}), utils.to_cart_coord(1.5 * player.size.y, utils.to_radians(player.cannon.angle)) );
+  this.acc = utils.to_cart_coord(power, utils.to_radians(player.cannon.angle));
+  this.size = {x: 2, y: 2};
+  this.max_damage = 300;
+  this.explosion_radius = 50;
+  // 0 means everyone hit gets max_damage, 1 is linear, etc.
+  this.damage_decay = 2;
+};
+
+game_ammo.prototype.update_physics = function (delta) {
+  // apply gravity to the current acceleration
+  this.acc = utils.pos_sum(this.acc, utils.pos_scalar_mult(this.game.config.gravity_vector, delta));
+
+  // apply the current acceleration to the position
+  this.pos = utils.pos_sum(this.pos, utils.pos_scalar_mult(this.acc, delta));
+
+  // check collisions with players
+  for (var j in this.game.sprites.players) {
+    var player = this.game.sprites.players[j];
+    if (player.pos.x - player.size.x / 2 < this.pos.x + this.size.x / 2 &&
+        player.pos.x + player.size.x / 2 > this.pos.x + this.size.x / 2 &&
+        player.pos.y - player.size.y / 2 < this.pos.y + this.size.y / 2 &&
+        player.pos.y + player.size.y / 2 > this.pos.y + this.size.y / 2) {
+      this.hit();
+    }
+  }
+
+  // check collision with the ground
+  if (this.pos.y >= this.game.terrain.ground_level_at_x(this.pos.x)) {
+    this.hit();
+  }
+};
+
+game_ammo.prototype.hit = function () {
+  // if on the client, draw animation of explosion + play sounds
+  if (!this.game.server) {
+    this.game.animations[ ++this.game.last_animation_id ] = new game_animation(this.game, this);
+  } else {
+    // compute damage done
+    for (var j in this.game.sprites.players) {
+      var player = this.game.sprites.players[ j ];
+      var dist_to_explosion = utils.pos_dist(player.pos, this.pos);
+
+      if (dist_to_explosion < this.explosion_radius) {
+        // closer to 0, further we were from explosion, lower the damage
+        var ratio = 1 - (dist_to_explosion / this.explosion_radius);
+
+        player.take_damage( this.max_damage * Math.pow(ratio, this.damage_decay) );
+      }
+    }
+  }
+
+  // self delete
+  for (var i in this.game.sprites.ammo) {
+    if (this == this.game.sprites.ammo[ i ]) {
+      delete this.game.sprites.ammo[ i ];
+    }
+  }
+};
+
+game_ammo.prototype.draw = function (ctx) {
+  ctx.beginPath();
+  ctx.fillStyle = '#dedede';
+  ctx.arc(this.pos.x, this.pos.y, this.size.x, Math.PI * 2, 0);
+  ctx.fill();
+};
+
+
+/***
+* Animation class
+***/
+
+var game_animation = function (game, animating) {
+  this.game = game;
+  this.pos = animating.pos;
+
+  this.start_size = animating.explosion_radius;
+  this.end_size = 0;
+  this.duration = 1;
+  this.start_time = this.game.local_time;
+
+  this.size = this.start_size;
+};
+
+game_animation.prototype.update = function () {
+  var progress = (this.game.local_time - this.start_time);
+
+  if (progress > this.duration) {
+    // self delete
+    for (var i in this.game.animations) {
+      if (this == this.game.animations[ i ]) {
+        delete this.game.animations[ i ];
+      }
+    }
+  } else {
+    this.size = utils.lerp_e(this.start_size, this.end_size, progress/this.duration, 4);
+  }
+};
+
+game_animation.prototype.draw = function (ctx) {
+  ctx.beginPath();
+  var gradient = ctx.createRadialGradient(this.pos.x,this.pos.y,this.size ,this.pos.x,this.pos.y,0);
+  gradient.addColorStop(0, 'red');
+  gradient.addColorStop(1, 'yellow');
+  ctx.fillStyle = gradient;
+  ctx.arc(this.pos.x, this.pos.y, this.size, Math.PI * 2, 0);
+  ctx.fill();
+};
+
+/***
 * Utilities
 ***/
 
@@ -601,14 +778,18 @@ Number.prototype.fixed = function(n) { n = n || 3; return parseFloat(this.toFixe
 
 var utils = {
   lerp: function (p, n, t) { var _t = Number(t); _t = (Math.max(0, Math.min(1, _t))).fixed(3); return (p + _t * (n - p)).fixed(3); },
+  lerp_e: function (p, n, t, e) { var _t = Number(t); _t = (Math.max(0, Math.min(1, _t))).fixed(3); return (p + Math.pow(_t, e) * (n - p)).fixed(3); },
   pos: function (vector) { return {x: vector.x, y: vector.y}; },
   pos_sum: function (vect1, vect2) { return {x: (vect1.x + vect2.x).fixed(3), y: (vect1.y + vect2.y).fixed(3)}; },
   pos_scalar_mult: function (vector, factor) { return {x: (vector.x * factor).fixed(3), y: (vector.y * factor).fixed(3)}; },
   pos_lerp: function (origin, target, ratio) { return { x: this.lerp(origin.x, target.x, ratio), y:this.lerp(origin.y, target.y, ratio) }; },
+  pos_dist: function (vect1, vect2) { return Math.sqrt( Math.pow(vect1.x - vect2.x, 2) + Math.pow(vect1.y - vect2.y, 2) ).fixed(3); },
   cannon: function (vector) { return {angle: vector.angle}; },
   angle_sum: function (vect1, vect2) { return {angle: (vect1.angle + vect2.angle).fixed(3)}; },
   angle_scalar_mult: function (vector, factor) { return {angle: (vector.angle * factor).fixed(3)}; },
-  angle_lerp: function (origin, target, ratio) { return { angle: this.lerp(origin.angle, target.angle, ratio) }; }
+  angle_lerp: function (origin, target, ratio) { return { angle: this.lerp(origin.angle, target.angle, ratio) }; },
+  to_cart_coord: function (vect_length, theta) { return { x:(vect_length * Math.cos(theta)).fixed(3), y:(vect_length * Math.sin(Math.PI + theta)).fixed(3) }; },
+  to_radians: function (degrees) { return (degrees * (Math.PI/180)).fixed(6); }
 }
 
 // if we're on the server, this is a module

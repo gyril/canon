@@ -439,7 +439,13 @@ game_core.prototype.client_draw_frame = function () {
   this.client_interpolate_sprites_positions();
 
   var ctx = this.ctx;
+
   ctx.clearRect(0, 0, this.config.world.width, this.config.world.height);
+  var gradient = ctx.createLinearGradient(0, this.config.world.height, 0, 0);
+  gradient.addColorStop(0, '#8CC4F3');
+  gradient.addColorStop(1, '#003D81');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, this.config.world.width, this.config.world.height);
 
   this.terrain.draw(ctx);
 
@@ -528,7 +534,7 @@ game_core.prototype.server_handle_input = function (client, input, input_time, i
 
 game_core.prototype.drawHUD = function (ctx) {
   ctx.font = '14px Courier';
-  ctx.fillStyle = this.local_player.color;
+  ctx.fillStyle = 'white';
   ctx.fillText(this.net_ping + ' ping', 10, 20);
   ctx.fillText(Math.round(90 - this.local_player.cannon.angle) + '°', 10, 35);
   ctx.fillText('Round ' + this.round, 10, 50);

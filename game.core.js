@@ -106,36 +106,44 @@ game_core.prototype.start_physics_simulation = function () {
 
 game_core.prototype.update_physics = function (delta) {
 
-  /** FIXME: server and client code are quite different and should probably be split **/
-
-  // attach the vectors resulting from player inputs
-  for (var player_index in this.sprites.players) {
-    var player = this.sprites.players[ player_index ]
-
-    // if server corrected the position of the client, apply it now
-    if (player.server_sent_update) {
-      player.pos = utils.pos( player.server_data.pos );
-      player.cannon = utils.cannon( player.server_data.cannon );
-      player.server_sent_update = false;;
-    }
-
-    this.process_input(player);
-  }
-
-  // on the server, update the sprites that are not affected by inputs
+  // the server must: process all inputs from clients then discard the input buffers then update the positions and check collisions
   if (this.server) {
 
     for (var sprite_type in this.sprites) {
+      // if players, process inputs received from network, attach resulting vectors to sprites
+      if (sprite_type == 'players') {
+        for (var player_index in this.sprites.players) {
+          var player = this.sprites.players[ player_index ];
+          this.process_input(player);
+        }
+      }
+
+      // then update the physics and check collisions
       for (var id in this.sprites[sprite_type]) {
         var sprite = this.sprites[sprite_type][id];
         sprite.update_physics(delta);
       }
     }
 
-  } else {
-  // on the client, just handle ourselves
-    this.local_player.update_physics(delta);
   }
+
+  // the client must: correct its local position if server sent an update, process remaining inputs, update its own
+  // position, as well as the non-deterministic sprites (players)
+  else {
+
+    var player = this.local_player;
+
+    if (player.server_sent_update) {
+      player.pos = utils.pos( player.server_data.pos );
+      player.cannon = utils.cannon( player.server_data.cannon );
+      player.server_sent_update = false;
+    }
+
+    this.process_input(player);
+    player.update_physics(delta);
+
+  }
+
 };
 
 game_core.prototype.process_input = function (player) {

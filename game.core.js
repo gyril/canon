@@ -1,6 +1,15 @@
 var game_core = function (server, clients) {
+  // are we the server?
   this.server = !!server;
+
+  // the interval between two updates sent by the server
   this.send_update_rate = 100;
+
+  // millisec the client is behind the server, to allow the server to send more updates for us to smooth things
+  this.client_interpolate_lag = 500;
+
+  // millisec of server updates the client holds, so we can try and interpolate in between two updates
+  this.server_updates_buffer_duration = 5000;
 
   this.config = {
     players_count: 2,
@@ -49,9 +58,6 @@ var game_core = function (server, clients) {
     this.socket.on('serverupdate', this.client_onserverupdate.bind(this));
     this.socket.on('ping', this.client_onping.bind(this));
 
-    // millisec the client is behind the server, to allow the server to send more updates for us to smooth things
-    this.client_interpolate_lag = 2000;
-
     // listen to keyboard inputs
     this.keyboard = new THREEx.KeyboardState();
     this.input_seq = 1;
@@ -99,13 +105,15 @@ game_core.prototype.start_physics_simulation = function () {
 };
 
 game_core.prototype.update_physics = function (delta) {
+
+  /** FIXME: server and client code are quite different and should probably be split **/
+
   // attach the vectors resulting from player inputs
   for (var player_index in this.sprites.players) {
     var player = this.sprites.players[ player_index ]
 
     // if server corrected the position of the client, apply it now
     if (player.server_sent_update) {
-      console.log('server has us at:', player.server_data.pos);
       player.pos = utils.pos( player.server_data.pos );
       player.cannon = utils.cannon( player.server_data.cannon );
       player.server_sent_update = false;;
@@ -114,12 +122,19 @@ game_core.prototype.update_physics = function (delta) {
     this.process_input(player);
   }
 
-  // update the sprites that are not affected by inputs
-  for (var sprite_type in this.sprites) {
-    for (var id in this.sprites[sprite_type]) {
-      var sprite = this.sprites[sprite_type][id];
-      sprite.update_physics(delta);
+  // on the server, update the sprites that are not affected by inputs
+  if (this.server) {
+
+    for (var sprite_type in this.sprites) {
+      for (var id in this.sprites[sprite_type]) {
+        var sprite = this.sprites[sprite_type][id];
+        sprite.update_physics(delta);
+      }
     }
+
+  } else {
+  // on the client, just handle ourselves
+    this.local_player.update_physics(delta);
   }
 };
 
@@ -215,14 +230,13 @@ game_core.prototype.client_onserverupdate = function (data) {
   this.server_time = data.t;
   this.server_updates.push(data);
 
-  // we don't expect the latency to go over 2000ms, so we keep (2000 / send_update_rate) server updates for entity interpolation
-  if (this.server_updates.length > (2000 / this.send_update_rate)) {
+  // we don't expect the latency to go over server_updates_buffer_duration ms, so we keep (server_updates_buffer_duration / send_update_rate) server updates for entity interpolation
+  if (this.server_updates.length > (this.server_updates_buffer_duration / this.send_update_rate)) {
     this.server_updates.splice(0,1);
   }
 
   // correct potential discrepancies between client and server
   this.client_correct_local_position();
-  this.client_interpolate_sprites_positions();
 };
 
 game_core.prototype.client_correct_local_position = function () {
@@ -254,7 +268,6 @@ game_core.prototype.client_correct_local_position = function () {
 
     // tell the local client to replay inputs from where the server stopped
     this.local_player.last_input_seq = this.local_player.inputs[ lastinputseq_index ].seq;
-    console.log('server is catching up', lastinputseq_index, this.local_player.last_input_seq);
 
     var inputs_to_clear = (lastinputseq_index + 1);
     this.local_player.inputs.splice(0, inputs_to_clear);
@@ -262,14 +275,65 @@ game_core.prototype.client_correct_local_position = function () {
 };
 
 game_core.prototype.client_interpolate_sprites_positions = function () {
-  var latest_server_data = this.server_updates[this.server_updates.length-1];
+  var interpolate = true;
+
+  // only one update: no interpolation possible, do nothing
+  if (this.server_updates.length < 2) {
+    return;
+  }
+
+  var compute_time = this.local_time - (this.client_interpolate_lag)/1000.0;
+  var origin_server_data = null;
+  var target_server_data = null;
+
+  // if we are computing before the first update, don't do anything just yet
+  if (compute_time < this.server_updates[0].t) {
+    return;
+  }
+
+  // let's find between which updates the client (offset by a interpolate_lag) is now
+  for (var i = 0; i < this.server_updates.length; i++) {
+    var origin = this.server_updates[i];
+    var target = this.server_updates[i+1];
+
+    if (origin.t < compute_time && compute_time <= target.t) {
+      origin_server_data = origin;
+      target_server_data = target;
+      break;
+    }
+  }
+
+  // if we are after the last snapshot received, stick to the last known pos: no interpolation
+  if (!origin_server_data) {
+    interpolate = false;
+    target_server_data = this.server_updates[this.server_updates.length - 1];
+  } else {
+    var distance = compute_time - origin_server_data.t;
+    var max_distance = target_server_data.t - origin_server_data.t;
+    var ratio = (max_distance == 0) ? 0 : (distance / max_distance).fixed(3);
+  }
 
   // for players other than local client's player
   for (var i in this.sprites.players) {
     var sprite = this.sprites.players[ i ];
-    if (sprite.userid != this.local_player.userid) {
-      sprite.pos = utils.pos( latest_server_data.players_data[ sprite.player_index ].pos );
-      sprite.cannon = utils.cannon( latest_server_data.players_data[ sprite.player_index ].cannon );
+
+    // don't touch local client
+    if (i != this.local_player.player_index) {
+      if (!interpolate) {
+        console.log('not interpolating cuz we are ahead');
+        sprite.pos = utils.pos( target_server_data.players_data[ sprite.player_index ].pos );
+        sprite.cannon = utils.cannon( target_server_data.players_data[ sprite.player_index ].cannon );
+        console.log(this.server_updates[0].t, target_server_data.t, compute_time);
+      } else {
+      // linear interpolation between the two positions
+
+        var origin_data = origin_server_data.players_data[ sprite.player_index ];
+        var target_data = target_server_data.players_data[ sprite.player_index ];
+
+        sprite.pos = utils.pos_lerp( origin_data.pos, target_data.pos, ratio );
+        sprite.cannon = utils.angle_lerp( origin_data.cannon, target_data.cannon, ratio );
+
+      }
     }
   }
 };
@@ -292,6 +356,7 @@ game_core.prototype.client_ping_heartbeat = function () {
 
 game_core.prototype.client_draw_frame = function () {
   this.client_handle_input();
+  this.client_interpolate_sprites_positions();
 
   var ctx = this.ctx;
   ctx.clearRect(0, 0, this.config.world.width, this.config.world.height);
@@ -301,10 +366,15 @@ game_core.prototype.client_draw_frame = function () {
   for (var sprite_type in this.sprites) {
     for (var j in this.sprites[ sprite_type ]) {
       var sprite = this.sprites[ sprite_type ][ j ];
-      sprite.draw(ctx);
+      // don't paint the local client just yet
+      if (sprite_type == 'players' && j != this.local_player.player_index) {
+        sprite.draw(ctx);
+      }
     }
   }
 
+  // paint the local client on top of everyone else
+  this.local_player.draw(ctx);
   window.requestAnimationFrame(this.client_draw_frame.bind(this));
 };
 
@@ -474,12 +544,15 @@ game_terrain.prototype.draw = function (ctx) {
 Number.prototype.fixed = function(n) { n = n || 3; return parseFloat(this.toFixed(n)); };
 
 var utils = {
+  lerp: function (p, n, t) { var _t = Number(t); _t = (Math.max(0, Math.min(1, _t))).fixed(3); return (p + _t * (n - p)).fixed(3); },
   pos: function (vector) { return {x: vector.x, y: vector.y}; },
   pos_sum: function (vect1, vect2) { return {x: (vect1.x + vect2.x).fixed(3), y: (vect1.y + vect2.y).fixed(3)}; },
   pos_scalar_mult: function (vector, factor) { return {x: (vector.x * factor).fixed(3), y: (vector.y * factor).fixed(3)}; },
+  pos_lerp: function (origin, target, ratio) { return { x: this.lerp(origin.x, target.x, ratio), y:this.lerp(origin.y, target.y, ratio) }; },
   cannon: function (vector) { return {angle: vector.angle}; },
   angle_sum: function (vect1, vect2) { return {angle: (vect1.angle + vect2.angle).fixed(3)}; },
-  angle_scalar_mult: function (vector, factor) { return {angle: (vector.angle * factor).fixed(3)}; }
+  angle_scalar_mult: function (vector, factor) { return {angle: (vector.angle * factor).fixed(3)}; },
+  angle_lerp: function (origin, target, ratio) { return { angle: this.lerp(origin.angle, target.angle, ratio) }; }
 }
 
 // if we're on the server, this is a module

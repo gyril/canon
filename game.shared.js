@@ -1,3 +1,5 @@
+// deprecated
+
 var game_core = function (id, clients) {
 
   this.id = id;

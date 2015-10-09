@@ -15,7 +15,8 @@ var game_core = function (server, clients) {
     players_count: 2,
     colors: ['hsl(240, 50%, 50%)', 'hsl(0, 50%, 50%)'],
     gravity_vector: {x:0, y: 100},
-    world: { width : 720, height : 480 }
+    world: { width : 720, height : 480 },
+    round_duration: 5
   };
 
   this.sprites = {'players': {}, 'ammo': {}};
@@ -55,7 +56,8 @@ var game_core = function (server, clients) {
     this.net_latency = 0;
 
     this.socket.on('first_sync', this.client_first_sync_from_server.bind(this));
-    this.socket.on('serverupdate', this.client_onserverupdate.bind(this));
+    this.socket.on('server_update', this.client_on_server_update.bind(this));
+    this.socket.on('next_round', this.client_on_next_round.bind(this));
     this.socket.on('ping', this.client_onping.bind(this));
 
     // listen to keyboard inputs
@@ -77,6 +79,15 @@ var game_core = function (server, clients) {
   // update the physics simulation every 15ms
   this.last_physics_update = 0;
   this.start_physics_simulation();
+
+  // update the game logic
+  this.round = 0;
+  this.round_start_time = 0;
+  this.round_id = 0;
+  // only the server has authority over the rounds
+  if (this.server) {
+    this.server_start_next_round();
+  }
 };
 
 game_core.prototype.create_timer = function () {
@@ -92,9 +103,6 @@ game_core.prototype.create_timer = function () {
 game_core.prototype.start_physics_simulation = function () {
 
   setInterval(function () {
-    // FIXME: each step is fixed to 15ms to keep server and client in sync
-    // var physics_delta = Date.now() - this.last_physics_update;
-
     // we advance the simulation by 15ms
     var physics_delta = 15;
     this.last_physics_update += 1;
@@ -102,6 +110,21 @@ game_core.prototype.start_physics_simulation = function () {
     this.update_physics(physics_delta / 1000.0);
   }.bind(this), 15);
 
+};
+
+game_core.prototype.server_start_next_round = function (round) {
+  this.round += 1;
+  this.round_start_time = this.local_time;
+  this.round_player_index = (this.round % this.config.players_count);
+  console.log('starting round', this.round);
+
+  var round_data = {round: this.round, round_start_time: this.round_start_time, round_player_index: this.round_player_index};
+  for (var i in this.sprites.players) {
+    this.sprites.players[ i ].client.emit('next_round', round_data);
+  }
+
+  // keep this timer id so we can clear it in case a player fires (otherwise it's next round)
+  this.round_id = setTimeout(this.server_start_next_round.bind(this), this.config.round_duration * 1000);
 };
 
 game_core.prototype.update_physics = function (delta) {
@@ -133,7 +156,7 @@ game_core.prototype.update_physics = function (delta) {
 
     var player = this.local_player;
 
-    if (player.server_sent_update) {
+    if (player && player.server_sent_update) {
       player.pos = utils.pos( player.server_data.pos );
       player.cannon = utils.cannon( player.server_data.cannon );
       player.server_sent_update = false;
@@ -152,8 +175,14 @@ game_core.prototype.process_input = function (player) {
 
   // iterate over all the inputs stored
   for (var j = 0; j < player.inputs.length; j++) {
+    // if this input was sent after round for this player ended, discard inputs after it
+    if (player.player_index != this.round_player_index && player.inputs[j].time > this.round_start_time) {
+      break;
+    }
+
     // if this input from the local buffer has already been processed, skip it
     if (player.inputs[j].seq <= player.last_input_seq) continue;
+
     // this input is still unprocessed
     var input = player.inputs[j].inputs;
 
@@ -206,7 +235,7 @@ game_core.prototype.send_server_update_to_clients = function () {
   };
 
   for (var i in this.clients) {
-    this.clients[i].emit( 'serverupdate', this.laststate );
+    this.clients[i].emit( 'server_update', this.laststate );
   }
 };
 
@@ -234,7 +263,7 @@ game_core.prototype.client_first_sync_from_server = function (sync_data) {
   this.client_draw_frame();
 };
 
-game_core.prototype.client_onserverupdate = function (data) {
+game_core.prototype.client_on_server_update = function (data) {
   this.server_time = data.t;
   this.server_updates.push(data);
 
@@ -300,7 +329,7 @@ game_core.prototype.client_interpolate_sprites_positions = function () {
   }
 
   // let's find between which updates the client (offset by a interpolate_lag) is now
-  for (var i = 0; i < this.server_updates.length; i++) {
+  for (var i = 0; i < this.server_updates.length - 1; i++) {
     var origin = this.server_updates[i];
     var target = this.server_updates[i+1];
 
@@ -327,11 +356,10 @@ game_core.prototype.client_interpolate_sprites_positions = function () {
 
     // don't touch local client
     if (i != this.local_player.player_index) {
+      // if we are ahead, don't interpolate
       if (!interpolate) {
-        console.log('not interpolating cuz we are ahead');
         sprite.pos = utils.pos( target_server_data.players_data[ sprite.player_index ].pos );
         sprite.cannon = utils.cannon( target_server_data.players_data[ sprite.player_index ].cannon );
-        console.log(this.server_updates[0].t, target_server_data.t, compute_time);
       } else {
       // linear interpolation between the two positions
 
@@ -344,6 +372,12 @@ game_core.prototype.client_interpolate_sprites_positions = function () {
       }
     }
   }
+};
+
+game_core.prototype.client_on_next_round = function (data) {
+  this.round = data.round;
+  this.round_start_time = data.round_start_time;
+  this.round_player_index = data.round_player_index;
 };
 
 game_core.prototype.client_onping = function (data) {
@@ -381,8 +415,12 @@ game_core.prototype.client_draw_frame = function () {
     }
   }
 
-  // paint the local client on top of everyone else
+  // paint the local client on top of every other sprite
   this.local_player.draw(ctx);
+
+  // paint the HUD on top of everything
+  this.drawHUD(ctx);
+
   window.requestAnimationFrame(this.client_draw_frame.bind(this));
 };
 
@@ -442,6 +480,16 @@ game_core.prototype.server_handle_input = function (client, input, input_time, i
     }
   }
 };
+
+game_core.prototype.drawHUD = function (ctx) {
+  ctx.font = '14px Courier';
+  ctx.fillStyle = this.local_player.color;
+  ctx.fillText(this.net_ping + ' ping', 10, 20);
+  ctx.fillText(Math.round(this.local_player.cannon.angle * 180 / Math.PI) + '°', 10, 35);
+  ctx.fillText('Round ' + this.round, 10, 50);
+  ctx.fillText(Math.round(this.config.round_duration - (this.local_time - this.round_start_time)), 10, 65);
+};
+
 
 
 /***

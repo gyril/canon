@@ -59,11 +59,26 @@ var game_core = function (server, clients) {
     this.net_ping = 0;
     this.net_latency = 0;
 
-    this.socket.on('first_sync', this.client_first_sync_from_server.bind(this));
-    this.socket.on('server_update', this.client_on_server_update.bind(this));
-    this.socket.on('next_round', this.client_on_next_round.bind(this));
-    this.socket.on('shot_sync', this.client_on_shot_sync.bind(this));
-    this.socket.on('ping', this.client_onping.bind(this));
+    // this.socket.on('first_sync', this.client_first_sync_from_server.bind(this));
+    // this.socket.on('server_update', this.client_on_server_update.bind(this));
+    // this.socket.on('next_round', this.client_on_next_round.bind(this));
+    // this.socket.on('shot_sync', this.client_on_shot_sync.bind(this));
+    // this.socket.on('ping', this.client_onping.bind(this));
+
+    function addEventHandler (eventName, handler) {
+      var client_fake_lag = 200;
+      this.socket.on(eventName, function (d) {
+        setTimeout(function () {
+          handler(d);
+        }, client_fake_lag);
+      });
+    };
+
+    addEventHandler('first_sync', this.client_first_sync_from_server.bind(this));
+    addEventHandler('server_update', this.client_on_server_update.bind(this));
+    addEventHandler('next_round', this.client_on_next_round.bind(this));
+    addEventHandler('shot_sync', this.client_on_shot_sync.bind(this));
+    addEventHandler('ping', this.client_onping.bind(this));
 
     // listen to keyboard inputs
     this.keyboard = new THREEx.KeyboardState();
@@ -166,6 +181,11 @@ game_core.prototype.update_physics = function (delta) {
   else {
 
     var player = this.local_player;
+
+    // game hasn't started yet
+    if (!player) {
+      return
+    }
 
     if (player && player.server_sent_update) {
       player.pos = utils.pos( player.server_data.pos );
@@ -561,7 +581,7 @@ game_core.prototype.drawHUD = function (ctx) {
   ctx.fillText(this.net_ping + ' ping', 10, 20);
   ctx.fillText(Math.round(90 - this.local_player.cannon.angle) + '°', 10, 35);
   ctx.fillText('Round ' + this.round, 10, 50);
-  var time_left_in_round = Math.max(0, Math.round(this.config.round_duration - (this.local_time - this.round_start_time)));
+  var time_left_in_round = Math.max(0, Math.ceil(this.config.round_duration - (this.local_time - this.round_start_time)));
   ctx.fillText(time_left_in_round, 10, 65);
 };
 

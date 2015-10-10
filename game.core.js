@@ -16,7 +16,7 @@ var game_core = function (server, clients) {
     colors: ['hsl(240, 50%, 50%)', 'hsl(0, 50%, 50%)'],
     gravity_vector: {x:0, y: 100},
     world: { width : 720, height : 480 },
-    round_duration: 5
+    round_duration: 10
   };
 
   this.sprites = {'players': {}, 'ammo': {}};
@@ -62,7 +62,8 @@ var game_core = function (server, clients) {
     this.socket.on('first_sync', this.client_first_sync_from_server.bind(this));
     this.socket.on('server_update', this.client_on_server_update.bind(this));
     this.socket.on('next_round', this.client_on_next_round.bind(this));
-    this.socket.on('shot_sync', this.client_on_shot_sync.bind(this));
+    // FIXME: still needed?
+    // this.socket.on('shot_sync', this.client_on_shot_sync.bind(this));
     this.socket.on('ping', this.client_onping.bind(this));
 
     // listen to keyboard inputs
@@ -143,11 +144,11 @@ game_core.prototype.update_physics = function (delta) {
         for (var player_index in this.sprites.players) {
           var player = this.sprites.players[ player_index ];
           this.process_input(player);
-        }
 
-        // player fired! end round, compute trajectory and damage
-        if (player.inputs_vector.fire) {
-          this.player_fired(player);
+          // player fired! end round, compute trajectory and damage
+          if (player.inputs_vector.fire) {
+            this.player_fired(player);
+          }
         }
       }
 
@@ -173,6 +174,10 @@ game_core.prototype.update_physics = function (delta) {
     }
 
     this.process_input(player);
+    if (player.inputs_vector.fire) {
+      this.player_fired(player);
+    }
+
     player.update_physics(delta);
 
     // update the ammo physics
@@ -282,6 +287,11 @@ game_core.prototype.client_first_sync_from_server = function (sync_data) {
 game_core.prototype.client_on_server_update = function (data) {
   this.server_time = data.t;
   this.server_updates.push(data);
+
+  // sync health
+  for (var i = 0; i < data.players_data.length; i++) {
+    this.sprites.players[ i ].health = data.players_data[ i ].health;
+  }
 
   // we don't expect the latency to go over server_updates_buffer_duration ms, so we keep (server_updates_buffer_duration / send_update_rate) server updates for entity interpolation
   if (this.server_updates.length > (this.server_updates_buffer_duration / this.send_update_rate)) {
@@ -399,16 +409,23 @@ game_core.prototype.client_on_next_round = function (data) {
 
 game_core.prototype.player_fired = function (player) {
   console.log('BOOM');
-  clearTimeout(this.round_id);
-  var ammo = new game_ammo(this, player, 300);
+  var ammo = new game_ammo(this, player, 200);
   this.sprites.ammo[ ++this.last_sprite_id ] = ammo;
 
-  // tell the clients to stop round, display fire
-  for (var i in this.clients) {
-    this.clients[ i ].emit('shot_sync', {ammo: {pos: ammo.pos, acc: ammo.acc}});
+  // noone can play until next round
+  this.round_player_index = null;
+
+  if (this.server) {
+    // stop the round
+    clearTimeout(this.round_id);
+
+    // allow for animations before start of next round
+    this.server_start_next_round();
   }
 };
 
+
+// FIXME: still needed?
 game_core.prototype.client_on_shot_sync = function (shot_data) {
   // small hack: instantiate it to the local_player
   var ammo = new game_ammo(this, this.local_player, 300);
@@ -538,7 +555,7 @@ game_core.prototype.drawHUD = function (ctx) {
   ctx.fillText(this.net_ping + ' ping', 10, 20);
   ctx.fillText(Math.round(90 - this.local_player.cannon.angle) + '°', 10, 35);
   ctx.fillText('Round ' + this.round, 10, 50);
-  ctx.fillText(Math.round(this.config.round_duration - (this.local_time - this.round_start_time)), 10, 65);
+  ctx.fillText(Math.max(0, Math.round(this.config.round_duration - (this.local_time - this.round_start_time))), 10, 65);
 };
 
 
@@ -592,7 +609,7 @@ game_player.prototype.update_physics = function (delta) {
 };
 
 game_player.prototype.take_damage = function (damage) {
-  this.health -= damage.fixed(0);
+  this.health -= damage.fixed(3);
   if (this.health <= 0) {
     this.die();
   }
@@ -625,7 +642,7 @@ game_player.prototype.draw = function (ctx) {
   // HP
   ctx.font = '10px Courier';
   ctx.fillStyle = 'green';
-  ctx.fillText(this.health, this.pos.x, this.pos.y + 10);
+  ctx.fillText((this.health).fixed(0), this.pos.x, this.pos.y + 10);
 };
 
 
@@ -780,7 +797,7 @@ game_animation.prototype.draw = function (ctx) {
 * Utilities
 ***/
 
-Number.prototype.fixed = function(n) { n = n || 3; return parseFloat(this.toFixed(n)); };
+Number.prototype.fixed = function(n) { return parseFloat(this.toFixed(n)); };
 
 var utils = {
   lerp: function (p, n, t) { var _t = Number(t); _t = (Math.max(0, Math.min(1, _t))).fixed(3); return (p + _t * (n - p)).fixed(3); },

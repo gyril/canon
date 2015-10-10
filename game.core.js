@@ -70,7 +70,7 @@ var game_core = function (server, clients) {
     // this.socket.on('ping', this.client_onping.bind(this));
 
     function addEventHandler (eventName, handler) {
-      var client_fake_lag = 200;
+      var client_fake_lag = 0;
       this.socket.on(eventName, function (d) {
         setTimeout(function () {
           handler(d);

@@ -77,12 +77,14 @@ var game_core = function (server, clients) {
     addEventHandler('first_sync', this.client_first_sync_from_server.bind(this));
     addEventHandler('server_update', this.client_on_server_update.bind(this));
     addEventHandler('next_round', this.client_on_next_round.bind(this));
+    addEventHandler('stop_round', this.client_on_stop_round.bind(this));
     addEventHandler('shot_sync', this.client_on_shot_sync.bind(this));
     addEventHandler('ping', this.client_onping.bind(this));
 
     // listen to keyboard inputs
     this.keyboard = new THREEx.KeyboardState();
     this.input_seq = 1;
+    this.accept_inputs = true;
 
     // buffer of server states received
     this.server_updates = [];
@@ -144,7 +146,13 @@ game_core.prototype.server_start_next_round = function (round) {
   }
 
   // keep this timer id so we can clear it in case a player fires (otherwise it's next round)
-  this.round_id = setTimeout(this.server_start_next_round.bind(this), this.config.round_duration * 1000);
+  // tell clients that the round is over, and give them 2000 ms to prepare for next round
+  this.round_id = setTimeout(function () {
+    for (var i in this.sprites.players) {
+      this.sprites.players[ i ].client.emit('stop_round');
+    }
+    setTimeout(this.server_start_next_round.bind(this), 2000);
+  }.bind(this), this.config.round_duration * 1000);
 };
 
 game_core.prototype.update_physics = function (delta) {
@@ -195,9 +203,9 @@ game_core.prototype.update_physics = function (delta) {
 
     this.process_input(player);
 
-    // player fired! refuse all further inputs
+    // if the player has fired THEN we stop accepting new inputs until server says it's our turn again
     if (player.inputs_vector.fire) {
-      this.round_id = null;
+      this.accept_inputs = false;
     }
 
     player.update_physics(delta);
@@ -215,46 +223,38 @@ game_core.prototype.process_input = function (player) {
 
   var inputs_vector = { pos: {x:0, y:0}, cannon: {angle: 0}, fire: false };
 
-  // unless we're in a round, refuse inputs from everyone
-  if (this.round_id) {
+  // iterate over all the inputs stored
+  for (var j = 0; j < player.inputs.length; j++) {
+    // if this input was sent after round for this player ended, don't process it
+    if (player.player_index != this.round_player_index) continue;
 
-    // iterate over all the inputs stored
-    for (var j = 0; j < player.inputs.length; j++) {
-      // if this input was sent after round for this player ended, discard inputs after it
-      if (player.player_index != this.round_player_index && player.inputs[j].time > this.round_start_time) break;
+    // if this input from the local buffer has already been processed, skip it
+    if (player.inputs[j].seq <= player.last_input_seq) continue;
 
-      // if this input was sent before round for this player started, skip it
-      if (player.player_index == this.round_player_index && player.inputs[j].time <= this.round_start_time) continue;
+    // this input is still unprocessed
+    var input = player.inputs[j].inputs;
 
-      // if this input from the local buffer has already been processed, skip it
-      if (player.inputs[j].seq <= player.last_input_seq) continue;
+    // iterate over the different inputs we might have in this sequence
+    for(var i = 0; i < input.length; ++i) {
+      var key = input[i];
 
-      // this input is still unprocessed
-      var input = player.inputs[j].inputs;
-
-      // iterate over the different inputs we might have in this sequence
-      for(var i = 0; i < input.length; ++i) {
-        var key = input[i];
-
-        // increment the inputs_vector
-        if(key == 'l') {
-          inputs_vector.pos.x -= 1;
-        }
-        if(key == 'r') {
-          inputs_vector.pos.x += 1;
-        }
-        if(key == 'd') {
-          inputs_vector.cannon.angle += 1;
-        }
-        if(key == 'u') {
-          inputs_vector.cannon.angle -= 1;
-        }
-        if(key == 'f') {
-          inputs_vector.fire = true;
-        }
+      // increment the inputs_vector
+      if(key == 'l') {
+        inputs_vector.pos.x -= 1;
+      }
+      if(key == 'r') {
+        inputs_vector.pos.x += 1;
+      }
+      if(key == 'd') {
+        inputs_vector.cannon.angle += 1;
+      }
+      if(key == 'u') {
+        inputs_vector.cannon.angle -= 1;
+      }
+      if(key == 'f') {
+        inputs_vector.fire = true;
       }
     }
-
   }
 
   player.inputs_vector = inputs_vector;
@@ -306,7 +306,7 @@ game_core.prototype.client_first_sync_from_server = function (sync_data) {
     }
   }
 
-  // start the paint loop
+  // start the paint loop, listen to inputs
   this.client_draw_frame();
 };
 
@@ -431,6 +431,11 @@ game_core.prototype.client_on_next_round = function (data) {
   this.round_id = 1;
   this.round_start_time = data.round_start_time;
   this.round_player_index = data.round_player_index;
+  this.accept_inputs = (this.round_player_index == this.local_player.player_index);
+};
+
+game_core.prototype.client_on_stop_round = function () {
+  this.accept_inputs = false;
 };
 
 game_core.prototype.player_fired = function (player) {
@@ -438,7 +443,6 @@ game_core.prototype.player_fired = function (player) {
 
   // next round won't be called automatically
   clearTimeout(this.round_id);
-  this.round_id = null;
 
   // create the ammo
   var ammo = new game_ammo(this, player, 300);
@@ -519,6 +523,8 @@ game_core.prototype.client_draw_frame = function () {
 };
 
 game_core.prototype.client_handle_input = function () {
+  if (!this.accept_inputs) return;
+
   var input = [];
 
   if ( this.keyboard.pressed('A') ||

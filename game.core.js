@@ -143,12 +143,13 @@ game_core.prototype.update_physics = function (delta) {
         for (var player_index in this.sprites.players) {
           var player = this.sprites.players[ player_index ];
           this.process_input(player);
+
+          // player fired! end round, compute trajectory and damage
+          if (player.inputs_vector.fire) {
+            this.player_fired(player);
+          }
         }
 
-        // player fired! end round, compute trajectory and damage
-        if (player.inputs_vector.fire) {
-          this.player_fired(player);
-        }
       }
 
       // then update the physics and check collisions

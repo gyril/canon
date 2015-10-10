@@ -52,6 +52,10 @@ var game_core = function (server, clients) {
     // start sending updates
     setInterval(this.send_server_update_to_clients.bind(this), this.send_update_rate);
 
+    // first round starts after 10000 ms of init
+    setTimeout(function () {
+      this.server_start_next_round();
+    }.bind(this), 10000);
   } else {
     // socket from socketIO attached, listens to server communication
     this.socket = socket;
@@ -66,7 +70,7 @@ var game_core = function (server, clients) {
     // this.socket.on('ping', this.client_onping.bind(this));
 
     function addEventHandler (eventName, handler) {
-      var client_fake_lag = 0;
+      var client_fake_lag = 200;
       this.socket.on(eventName, function (d) {
         setTimeout(function () {
           handler(d);
@@ -104,12 +108,8 @@ var game_core = function (server, clients) {
 
   // update the game logic
   this.round = 0;
-  this.round_start_time = 0;
   this.round_id = 0;
-  // only the server has authority over the rounds
-  if (this.server) {
-    this.server_start_next_round();
-  }
+  this.round_start_time = 5; // small hack: we put 5000 so that the HUD displays 10s before first round
 };
 
 game_core.prototype.create_timer = function () {

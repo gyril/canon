@@ -66,7 +66,7 @@ var game_core = function (server, clients) {
     // this.socket.on('ping', this.client_onping.bind(this));
 
     function addEventHandler (eventName, handler) {
-      var client_fake_lag = 200;
+      var client_fake_lag = 0;
       this.socket.on(eventName, function (d) {
         setTimeout(function () {
           handler(d);
@@ -77,7 +77,6 @@ var game_core = function (server, clients) {
     addEventHandler('first_sync', this.client_first_sync_from_server.bind(this));
     addEventHandler('server_update', this.client_on_server_update.bind(this));
     addEventHandler('next_round', this.client_on_next_round.bind(this));
-    addEventHandler('stop_round', this.client_on_stop_round.bind(this));
     addEventHandler('shot_sync', this.client_on_shot_sync.bind(this));
     addEventHandler('ping', this.client_onping.bind(this));
 
@@ -85,6 +84,7 @@ var game_core = function (server, clients) {
     this.keyboard = new THREEx.KeyboardState();
     this.input_seq = 1;
     this.accept_inputs = true;
+    this.round_over = false;
 
     // buffer of server states received
     this.server_updates = [];
@@ -146,13 +146,8 @@ game_core.prototype.server_start_next_round = function (round) {
   }
 
   // keep this timer id so we can clear it in case a player fires (otherwise it's next round)
-  // tell clients that the round is over, and give them 2000 ms to prepare for next round
-  this.round_id = setTimeout(function () {
-    for (var i in this.sprites.players) {
-      this.sprites.players[ i ].client.emit('stop_round');
-    }
-    setTimeout(this.server_start_next_round.bind(this), 2000);
-  }.bind(this), this.config.round_duration * 1000);
+  // give us 3000 ms to prepare for next round to wait for late fire inputs
+  this.round_id = setTimeout(this.server_start_next_round.bind(this), this.config.round_duration * 1000 + 3000);
 };
 
 game_core.prototype.update_physics = function (delta) {
@@ -428,20 +423,21 @@ game_core.prototype.client_interpolate_sprites_positions = function () {
 
 game_core.prototype.client_on_next_round = function (data) {
   this.round = data.round;
-  this.round_id = 1;
   this.round_start_time = data.round_start_time;
   this.round_player_index = data.round_player_index;
   this.accept_inputs = (this.round_player_index == this.local_player.player_index);
-};
+  this.round_over = false; // a flag to display '0' time left when we fire
 
-game_core.prototype.client_on_stop_round = function () {
-  this.accept_inputs = false;
+  // end of the round, refuse inputs until server says OK again
+  this.round_id = setTimeout(function () {
+    this.accept_inputs = false;
+  }.bind(this), this.config.round_duration * 1000);
 };
 
 game_core.prototype.player_fired = function (player) {
   console.log('BOOM');
 
-  // next round won't be called automatically
+  // don't call to start the next round! we have some computing to do first
   clearTimeout(this.round_id);
 
   // create the ammo
@@ -457,7 +453,11 @@ game_core.prototype.player_fired = function (player) {
 };
 
 game_core.prototype.client_on_shot_sync = function (shot_data) {
-  // small hack: instantiate it to the local_player
+
+  // set the timer display to 0
+  this.round_over = true;
+
+  // small hack: instantiate it to the local_player, then move it to real position
   var ammo = new game_ammo(this, this.local_player, 300);
   ammo.pos = shot_data.ammo.pos;
   ammo.acc = shot_data.ammo.acc;
@@ -587,7 +587,7 @@ game_core.prototype.drawHUD = function (ctx) {
   ctx.fillText(this.net_ping + ' ping', 10, 20);
   ctx.fillText(Math.round(90 - this.local_player.cannon.angle) + '°', 10, 35);
   ctx.fillText('Round ' + this.round, 10, 50);
-  var time_left_in_round = Math.max(0, Math.ceil(this.config.round_duration - (this.local_time - this.round_start_time)));
+  var time_left_in_round = this.round_over ? 0 : Math.max(0, Math.ceil(this.config.round_duration - (this.local_time - this.round_start_time)));
   ctx.fillText(time_left_in_round, 10, 65);
 };
 
@@ -767,6 +767,9 @@ game_ammo.prototype.hit = function () {
         player.take_damage( this.max_damage * Math.pow(ratio, this.damage_decay) );
       }
     }
+
+    // we can proceed with next round after a 1000ms pause
+    setTimeout(this.game.server_start_next_round.bind(this.game), 1000);
   }
 
   // self delete

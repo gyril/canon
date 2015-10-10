@@ -174,6 +174,12 @@ game_core.prototype.update_physics = function (delta) {
     }
 
     this.process_input(player);
+
+    // player fired! refuse all further inputs
+    if (player.inputs_vector.fire) {
+      this.round_id = null;
+    }
+
     player.update_physics(delta);
 
     // update the ammo physics
@@ -189,41 +195,46 @@ game_core.prototype.process_input = function (player) {
 
   var inputs_vector = { pos: {x:0, y:0}, cannon: {angle: 0}, fire: false };
 
-  // iterate over all the inputs stored
-  for (var j = 0; j < player.inputs.length; j++) {
-    // if this input was sent after round for this player ended, discard inputs after it
-    if (player.player_index != this.round_player_index && player.inputs[j].time > this.round_start_time) break;
+  // unless we're in a round, refuse inputs from everyone
+  if (this.round_id) {
 
-    // if this input was sent before round for this player started, skip it
-    if (player.player_index == this.round_player_index && player.inputs[j].time <= this.round_start_time) continue;
+    // iterate over all the inputs stored
+    for (var j = 0; j < player.inputs.length; j++) {
+      // if this input was sent after round for this player ended, discard inputs after it
+      if (player.player_index != this.round_player_index && player.inputs[j].time > this.round_start_time) break;
 
-    // if this input from the local buffer has already been processed, skip it
-    if (player.inputs[j].seq <= player.last_input_seq) continue;
+      // if this input was sent before round for this player started, skip it
+      if (player.player_index == this.round_player_index && player.inputs[j].time <= this.round_start_time) continue;
 
-    // this input is still unprocessed
-    var input = player.inputs[j].inputs;
+      // if this input from the local buffer has already been processed, skip it
+      if (player.inputs[j].seq <= player.last_input_seq) continue;
 
-    // iterate over the different inputs we might have in this sequence
-    for(var i = 0; i < input.length; ++i) {
-      var key = input[i];
+      // this input is still unprocessed
+      var input = player.inputs[j].inputs;
 
-      // increment the inputs_vector
-      if(key == 'l') {
-        inputs_vector.pos.x -= 1;
-      }
-      if(key == 'r') {
-        inputs_vector.pos.x += 1;
-      }
-      if(key == 'd') {
-        inputs_vector.cannon.angle += 1;
-      }
-      if(key == 'u') {
-        inputs_vector.cannon.angle -= 1;
-      }
-      if(key == 'f') {
-        inputs_vector.fire = true;
+      // iterate over the different inputs we might have in this sequence
+      for(var i = 0; i < input.length; ++i) {
+        var key = input[i];
+
+        // increment the inputs_vector
+        if(key == 'l') {
+          inputs_vector.pos.x -= 1;
+        }
+        if(key == 'r') {
+          inputs_vector.pos.x += 1;
+        }
+        if(key == 'd') {
+          inputs_vector.cannon.angle += 1;
+        }
+        if(key == 'u') {
+          inputs_vector.cannon.angle -= 1;
+        }
+        if(key == 'f') {
+          inputs_vector.fire = true;
+        }
       }
     }
+
   }
 
   player.inputs_vector = inputs_vector;
@@ -274,7 +285,6 @@ game_core.prototype.client_first_sync_from_server = function (sync_data) {
       this.local_player = this.sprites.players[ i ];
     }
   }
-
 
   // start the paint loop
   this.client_draw_frame();
@@ -397,22 +407,29 @@ game_core.prototype.client_interpolate_sprites_positions = function () {
 };
 
 game_core.prototype.client_on_next_round = function (data) {
-  // TODO? could add a timer to make sure this is applied in sync with server_time
   this.round = data.round;
+  this.round_id = 1;
   this.round_start_time = data.round_start_time;
   this.round_player_index = data.round_player_index;
 };
 
 game_core.prototype.player_fired = function (player) {
   console.log('BOOM');
+
+  // next round won't be called automatically
   clearTimeout(this.round_id);
+  this.round_id = null;
+
+  // create the ammo
   var ammo = new game_ammo(this, player, 300);
   this.sprites.ammo[ ++this.last_sprite_id ] = ammo;
 
-  // tell the clients to stop round, display fire
+  // tell the clients to display ammo
   for (var i in this.clients) {
     this.clients[ i ].emit('shot_sync', {ammo: {pos: ammo.pos, acc: ammo.acc}});
   }
+
+  // launch new round
 };
 
 game_core.prototype.client_on_shot_sync = function (shot_data) {
@@ -544,7 +561,8 @@ game_core.prototype.drawHUD = function (ctx) {
   ctx.fillText(this.net_ping + ' ping', 10, 20);
   ctx.fillText(Math.round(90 - this.local_player.cannon.angle) + '°', 10, 35);
   ctx.fillText('Round ' + this.round, 10, 50);
-  ctx.fillText(Math.round(this.config.round_duration - (this.local_time - this.round_start_time)), 10, 65);
+  var time_left_in_round = Math.max(0, Math.round(this.config.round_duration - (this.local_time - this.round_start_time)));
+  ctx.fillText(time_left_in_round, 10, 65);
 };
 
 

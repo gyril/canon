@@ -289,7 +289,12 @@ game_core.prototype.client_on_server_update = function (data) {
     this.server_updates.splice(0,1);
   }
 
-  // correct potential discrepancies between client and server
+  // only server updates HPs
+  for (var i in this.sprites.players) {
+    this.sprites.players[ i ].health = data.players_data[ i ].health;
+  }
+
+  // correct potential discrepancies between client's position and server's
   this.client_correct_local_position();
 };
 
@@ -781,7 +786,7 @@ game_animation.prototype.draw = function (ctx) {
 * Utilities
 ***/
 
-Number.prototype.fixed = function(n) { n = n || 3; return parseFloat(this.toFixed(n)); };
+Number.prototype.fixed = function (n) { return parseFloat(this.toFixed(n)); };
 
 var utils = {
   lerp: function (p, n, t) { var _t = Number(t); _t = (Math.max(0, Math.min(1, _t))).fixed(3); return (p + _t * (n - p)).fixed(3); },

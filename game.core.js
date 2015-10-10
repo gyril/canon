@@ -9,7 +9,7 @@ var game_core = function (server, clients) {
   this.client_interpolate_lag = 500;
 
   // millisec of server updates the client holds, so we can try and interpolate in between two updates
-  this.server_updates_buffer_duration = 5000;
+  this.server_updates_buffer_duration = 2000;
 
   this.config = {
     players_count: 2,

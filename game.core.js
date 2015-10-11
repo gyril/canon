@@ -16,7 +16,7 @@ var game_core = function (server, clients) {
     colors: ['hsl(240, 50%, 50%)', 'hsl(0, 50%, 50%)'],
     gravity_vector: {x:0, y: 100},
     world: { width : 960, height : 540 },
-    round_duration: 5,
+    round_duration: 10,
     time_before_round_one: 5
   };
 

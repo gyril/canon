@@ -14,7 +14,7 @@ game_server.local_time = 0;
 game_server._dt = new Date().getTime();
 game_server._dte = new Date().getTime();
 
-game_server.fake_latency = 0;
+game_server.fake_latency = 500;
 game_server.messages = [];
 
 setInterval(function(){

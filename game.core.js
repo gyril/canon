@@ -70,7 +70,7 @@ var game_core = function (server, clients) {
     // this.socket.on('ping', this.client_onping.bind(this));
 
     function addEventHandler (eventName, handler) {
-      var client_fake_lag = 0;
+      var client_fake_lag = 200;
       this.socket.on(eventName, function (d) {
         setTimeout(function () {
           handler(d);
@@ -766,9 +766,10 @@ game_ammo.prototype.update_physics = function (delta) {
   this.pos = utils.pos_sum(this.pos, utils.pos_scalar_mult(this.acc, delta));
 
   // ammo gets bigger and deadlier with time
-  if (this.size.x < this.explosion_radius) {
-    this.size = utils.pos_scalar_mult(this.size, (1 + delta / 2));
-    this.max_damage *= (1 + delta);
+  if (this.size.x < 40) {
+    this.size = utils.pos_scalar_mult(this.size, (1 + delta / 4));
+    this.max_damage *= (1 + delta / 8);
+    this.explosion_radius *= (1 + delta / 8);
   }
 
   // check collisions with players

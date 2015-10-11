@@ -16,12 +16,16 @@ pregame_server.connect = function (client) {
 };
 
 pregame_server.lobbiesList = function () {
-  return _.map(this.lobbies, function (lobby) {
+  return _.filter(_.map(this.lobbies,
+   function (lobby) {
     return {
       id: lobby.id,
       name: lobby.name,
-      player_count: lobby.player_count
+      player_count: lobby.player_count,
+      status: lobby.status
     };
+  }), function (lobby) {
+    return lobby.status != 'playing';
   });
 };
 
@@ -36,7 +40,8 @@ pregame_server.onMessage = function (client, message) {
         id : UUID(),
         name: messageParts[1] || 'blank',
         player_count: 0,
-        players: []
+        players: [],
+        status: 'waiting'
       };
 
       this.lobbies[ lobby.id ] = lobby;
@@ -115,6 +120,7 @@ pregame_server.onMessage = function (client, message) {
         if (allReady) {
           this.sio.to(client.lobby.id).emit('start');
           game_server.createGame(client.lobby.players);
+          client.lobby.status = 'playing';
         }
       }
 

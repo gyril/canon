@@ -34,17 +34,17 @@ var
 pregame_server.sio = sio;
 
 // comment / uncomment to have a lobby named `blank` already created
-(function () {
-  var lobby = {
-    id : UUID(),
-    name: 'blank',
-    player_count: 0,
-    players: []
-  };
+// (function () {
+//   var lobby = {
+//     id : UUID(),
+//     name: 'blank',
+//     player_count: 0,
+//     players: []
+//   };
 
-  pregame_server.lobbies[ lobby.id ] = lobby;
-  pregame_server.sio.to('pregame').emit('lobbies', pregame_server.lobbiesList());
-})();
+//   pregame_server.lobbies[ lobby.id ] = lobby;
+//   pregame_server.sio.to('pregame').emit('lobbies', pregame_server.lobbiesList());
+// })();
 
 sio.on('connection', function (client) {
 
@@ -52,12 +52,15 @@ sio.on('connection', function (client) {
   client.on('init', function (id) {
     client.userid = id || uuid();
 
-    if (game_server.isUserInGame(client)) {
-      // FIXME: how to reattach username to client?
-      game_server.reconnect(client);
-    } else {
-      client.emit('initialized', { id: client.userid } );
-    }
+    // FIXME: implement player reconnect...maybe...later
+    // if (game_server.isUserInGame(client)) {
+    //   // FIXME: how to reattach username to client?
+    //   game_server.reconnect(client);
+    // } else {
+    //   client.emit('initialized', { id: client.userid } );
+    // }
+
+    client.emit('initialized', { id: client.userid } );
 
     console.log('Connected client ' + client.userid);
   });

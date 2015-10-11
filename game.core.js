@@ -82,6 +82,7 @@ var game_core = function (server, clients) {
     addEventHandler('server_update', this.client_on_server_update.bind(this));
     addEventHandler('next_round', this.client_on_next_round.bind(this));
     addEventHandler('shot_sync', this.client_on_shot_sync.bind(this));
+    addEventHandler('game_over', this.client_on_game_over.bind(this));
     addEventHandler('ping', this.client_onping.bind(this));
 
     // listen to keyboard inputs
@@ -112,6 +113,7 @@ var game_core = function (server, clients) {
   this.round_start_time = 5; // small hack: we put 5000 so that the HUD displays 10s before first round
 };
 
+
 game_core.prototype.create_timer = function () {
 
   setInterval(function () {
@@ -128,7 +130,6 @@ game_core.prototype.start_physics_simulation = function () {
     // we advance the simulation by 15ms
     var physics_delta = 15;
     this.last_physics_update += 1;
-
     this.update_physics(physics_delta / 1000.0);
   }.bind(this), 15);
 
@@ -264,6 +265,14 @@ game_core.prototype.process_input = function (player) {
     player.inputs = [];
   }
 };
+
+game_core.prototype.game_over = function (dead) {
+  clearTimeout(this.round_id);
+
+  for (var i in this.clients) {
+    this.clients[ i ].emit('game_over', {loser_index: dead.player_index});
+  }
+}
 
 game_core.prototype.send_server_update_to_clients = function () {
   // update server_time so that the clients know what time the server has
@@ -465,6 +474,13 @@ game_core.prototype.client_on_shot_sync = function (shot_data) {
   this.sprites.ammo[ ++this.last_sprite_id ] = ammo;
 };
 
+game_core.prototype.client_on_game_over = function (data) {
+  var local_wins = (data.loser_index != this.local_player.player_index);
+  var msg = local_wins ? 'YOU WIN!' : 'You lose.';
+  window.alert(msg);
+  window.location = '/';
+};
+
 game_core.prototype.client_onping = function (data) {
 
   this.net_ping = Date.now() - parseFloat( data );
@@ -650,6 +666,7 @@ game_player.prototype.take_damage = function (damage) {
 
 game_player.prototype.die = function () {
   console.log('PLAYER IS DEAD');
+  this.game.game_over(this);
 };
 
 game_player.prototype.set_server_data = function (data) {

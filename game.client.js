@@ -22,4 +22,9 @@ function createGame () {
 
   // fetch the rendering contexts
   game.ctx = game.viewport.getContext('2d');
+
+  game.assets = {
+    hud: new Image()
+  };
+  game.assets['hud'].src = 'hud.png';
 }

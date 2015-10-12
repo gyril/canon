@@ -24,7 +24,15 @@ function createGame () {
   game.ctx = game.viewport.getContext('2d');
 
   game.assets = {
-    hud: new Image()
+    images: {
+      hud: new Image()
+    // },
+    // sounds: {
+    //   fire: new Audio('fire.mp3'),
+    //   roll: new Audio('roll.mp3'),
+    //   cannon: new Audio('cannon.mp3'),
+    //   explosion: new Audio('explosion.mp3')
+    }
   };
-  game.assets['hud'].src = 'hud.png';
+  game.assets.images['hud'].src = 'hud.png';
 }

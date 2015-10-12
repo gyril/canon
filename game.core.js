@@ -654,7 +654,7 @@ game_core.prototype.drawHUD = function (ctx) {
   ctx.fillRect(190, this.config.world.height - 45, (this.config.world.width - 190) * (this.local_player.health / 1000), this.config.world.height - 5);
 
   // overlay
-  ctx.drawImage(this.assets.hud, 0, this.config.world.height - this.assets.hud.height);
+  ctx.drawImage(this.assets.images.hud, 0, this.config.world.height - this.assets.images.hud.height);
 
   // angle
   var text = Math.round(90 - this.local_player.cannon.angle) + '°';

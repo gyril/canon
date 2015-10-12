@@ -479,6 +479,7 @@ game_core.prototype.client_on_shot_sync = function (shot_data) {
   ammo.acc = shot_data.ammo.acc;
 
   this.sprites.ammo[ ++this.last_sprite_id ] = ammo;
+  this.assets.sounds.fire.play();
 };
 
 game_core.prototype.client_on_game_over = function (data) {
@@ -752,7 +753,6 @@ game_player.prototype.draw = function (ctx) {
   ctx.restore();
 
   // HP
-  ctx.font = '10px Courier';
   ctx.fillStyle = 'red';
   ctx.fillRect(this.pos.x - this.size.x * 2, this.pos.y + this.size.y, this.size.x * 2 * 2, 3);
   ctx.fillStyle = 'green';
@@ -856,6 +856,8 @@ game_ammo.prototype.update_physics = function (delta) {
 game_ammo.prototype.hit = function () {
   // if on the client, draw animation of explosion + play sounds
   if (!this.game.server) {
+    this.game.assets.sounds.explosion.play();
+
     this.game.animations[ ++this.game.last_animation_id ] = new game_animation(this.game, this);
   } else {
     // compute damage done

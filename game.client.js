@@ -26,12 +26,12 @@ function createGame () {
   game.assets = {
     images: {
       hud: new Image()
-    // },
-    // sounds: {
-    //   fire: new Audio('fire.mp3'),
-    //   roll: new Audio('roll.mp3'),
-    //   cannon: new Audio('cannon.mp3'),
-    //   explosion: new Audio('explosion.mp3')
+    },
+    sounds: {
+      fire: new Audio('fire.mp3'),
+      // move: new Audio('move.mp3'),
+      // cannon: new Audio('cannon.mp3'),
+      explosion: new Audio('explode.mp3')
     }
   };
   game.assets.images['hud'].src = 'hud.png';

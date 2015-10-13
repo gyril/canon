@@ -4,7 +4,7 @@
   "description": "Play Canon Online",
   "main": "app.js",
   "engines": {
-    "node": "0.10.x"
+    "node": "0.12.x"
   },
   "dependencies": {
     "canvas": "git://github.com/bpartridge/node-canvas-heroku.git",

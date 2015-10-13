@@ -17,7 +17,7 @@ var game_core = function (server, clients) {
     gravity_vector: {x:0, y: 100},
     world: { width : 960, height : 540 },
     round_duration: 10,
-    time_before_round_one: 10
+    time_before_round_one: 5
   };
 
   this.sprites = {'players': {}, 'ammo': {}};
@@ -700,6 +700,7 @@ var game_player = function (game, index, client) {
   this.server_sent_update = false;
   this.server_data = null;
   this.size = {x: 10, y: 10};
+  this.weight = 10;
   this.cannon = {angle: 90};
   this.speed = 80;
   this.health = 1000;
@@ -711,21 +712,27 @@ var game_player = function (game, index, client) {
 };
 
 game_player.prototype.update_physics = function (delta) {
-  // account for inputs vector
-  this.pos = utils.pos_sum(this.pos, utils.pos_scalar_mult(this.inputs_vector.pos, (this.speed * delta).fixed(3)));
-  this.cannon = utils.angle_sum(this.cannon, utils.angle_scalar_mult(this.inputs_vector.cannon, (20 * delta).fixed(3)));
+  // temporarily account for inputs vector
+  var tmp_pos = utils.pos_sum(this.pos, utils.pos_scalar_mult(this.inputs_vector.pos, (this.speed * delta).fixed(3)));
+
+  // is horizontal movement possible?
+  var tmp_pos_offset = {x: tmp_pos.x, y: tmp_pos.y - 1.5};
+  if (!this.game.terrain.check_collision_at_point(tmp_pos_offset)) {
+    this.pos = tmp_pos;
+  }
 
   // apply gravity to the current acceleration
-  this.acc = utils.pos_sum(this.acc, utils.pos_scalar_mult(this.game.config.gravity_vector, delta));
-
+  this.acc = utils.pos_sum(this.acc, utils.pos_scalar_mult(this.game.config.gravity_vector, delta * this.weight));
   // apply the current acceleration to the position
   this.pos = utils.pos_sum(this.pos, utils.pos_scalar_mult(this.acc, delta));
 
   // check collision with the ground
-  if (this.pos.y >= this.game.terrain.ground_level_at_x(this.pos.x)) {
-    this.pos.y = (this.game.terrain.ground_level_at_x(this.pos.x)).fixed(3);
+  if (this.game.terrain.check_collision_at_point(this.pos)) {
+    this.pos.y = (this.game.terrain.ground_level_above_point(this.pos)).fixed(3);
     this.acc.y = 0;
   }
+
+  this.cannon = utils.angle_sum(this.cannon, utils.angle_scalar_mult(this.inputs_vector.cannon, (20 * delta).fixed(3)));
 };
 
 game_player.prototype.take_damage = function (damage) {
@@ -748,7 +755,8 @@ game_player.prototype.draw = function (ctx) {
   // body
   ctx.beginPath();
   ctx.fillStyle = this.color;
-  ctx.arc(this.pos.x, this.pos.y, this.size.x, Math.PI, 0);
+  ctx.arc(this.pos.x, this.pos.y - this.size.y / 2, this.size.x, 0, Math.PI, false);
+  ctx.closePath();
   ctx.fill();
 
   // canon
@@ -828,22 +836,30 @@ game_terrain.prototype.set_collision_map_from_current_canvas = function () {
       this.collision_map[x][y] = (bitmap.data[idx] < 255) ? 0 : 1;
     }
   }
-}
+};
 
-game_terrain.prototype.ground_level_at_x = function (x) {
-  var y = this.world.height;
-  var x = Math.round(x);
+game_terrain.prototype.check_collision_at_point = function (point) {
+  var y = Math.round(point.y);
+  var x = Math.round(point.x);
+
+  if (x < 0 || x >= this.world.width) {
+    return true;
+  }
+
+  return !!this.collision_map[x][y];
+};
+
+game_terrain.prototype.ground_level_above_point = function (point) {
+  var y = Math.round(point.y);
+  var x = Math.round(point.x);
 
   if (x < 0 || x >= this.world.width) {
     return this.world.height;
   }
 
-  // start from the top then go down until pixel is hit
-  for (var i = 0; i < this.world.height; i++) {
-    if (this.collision_map[x][i]) {
-      y = i;
-      break;
-    }
+  // start from the point then go up until no pixel
+  while (this.collision_map[x][y] && y > 0) {
+    y--;
   }
 
   return y;
@@ -899,7 +915,8 @@ game_ammo.prototype.update_physics = function (delta) {
   }
 
   // check collision with the ground
-  if ((this.pos.y + this.size.y) >= this.game.terrain.ground_level_at_x(this.pos.x)) {
+  var pos_offset = {x: this.pos.x, y: this.pos.y + this.size.y};
+  if (this.game.terrain.check_collision_at_point(pos_offset)) {
     this.hit();
   }
 };
@@ -947,7 +964,7 @@ game_ammo.prototype.hit = function () {
 game_ammo.prototype.draw = function (ctx) {
   ctx.beginPath();
   ctx.fillStyle = '#dedede';
-  ctx.arc(this.pos.x, this.pos.y, this.size.x, Math.PI * 2, 0);
+  ctx.arc(this.pos.x, this.pos.y, this.size.x, 0, Math.PI * 2, 0);
   ctx.fill();
 };
 
@@ -989,7 +1006,7 @@ game_animation.prototype.draw = function (ctx) {
   gradient.addColorStop(0, 'red');
   gradient.addColorStop(1, 'yellow');
   ctx.fillStyle = gradient;
-  ctx.arc(this.pos.x, this.pos.y, this.size, Math.PI * 2, 0);
+  ctx.arc(this.pos.x, this.pos.y, this.size, 0, Math.PI * 2, 0);
   ctx.fill();
 };
 

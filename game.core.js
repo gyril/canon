@@ -17,7 +17,7 @@ var game_core = function (server, clients) {
     gravity_vector: {x:0, y: 100},
     world: { width : 960, height : 540 },
     round_duration: 10,
-    time_before_round_one: 5
+    time_before_round_one: 10
   };
 
   this.sprites = {'players': {}, 'ammo': {}};
@@ -34,7 +34,7 @@ var game_core = function (server, clients) {
 
     // those will be sent to the clients at first "sync" update
     // spawn terrain
-    this.terrain = new game_terrain(this.config.world);
+    this.terrain = new game_terrain(this.config.world, this);
 
     // spawn one player for each client
     var player_index = 0;
@@ -46,7 +46,8 @@ var game_core = function (server, clients) {
     // sync the spawned stuff with each client
     for (var i in this.clients) {
       this.clients[ i ].emit('first_sync', {
-        players: _.map(this.sprites.players, function (player) { return {userid: player.userid, pos: player.pos}; })
+        players: _.map(this.sprites.players, function (player) { return {userid: player.userid, pos: player.pos}; }),
+        terrain: {collision_map: this.terrain.collision_map}
       });
     }
 
@@ -69,6 +70,7 @@ var game_core = function (server, clients) {
     // this.socket.on('shot_sync', this.client_on_shot_sync.bind(this));
     // this.socket.on('ping', this.client_onping.bind(this));
 
+    // defer events so we can add fake client lag
     function addEventHandler (eventName, handler) {
       var client_fake_lag = 0;
       this.socket.on(eventName, function (d) {
@@ -114,6 +116,13 @@ var game_core = function (server, clients) {
   this.round_start_time = this.config.time_before_round_one - this.config.round_duration; // small hack: we put in the number of seconds before round 1
 };
 
+// if we're on the server, this is a module
+if ( 'undefined' != typeof global ) {
+  var fs = require('fs'),
+      Canvas = require('canvas');
+
+  module.exports = global.game_core = game_core;
+}
 
 game_core.prototype.create_timer = function () {
 
@@ -295,9 +304,8 @@ game_core.prototype.send_server_update_to_clients = function () {
 
 game_core.prototype.client_first_sync_from_server = function (sync_data) {
   // generate same terrain
-  this.terrain = new game_terrain(this.config.world);
-  // TODO: match the bitmap
-  // this.terrain.stuff = sync_data.terrain.stuff;
+  this.terrain = new game_terrain(this.config.world, this);
+  this.terrain.collision_map = sync_data.terrain.collision_map;
 
   // generate same players
   for (var i = 0; i < sync_data.players.length; i++) {
@@ -479,7 +487,7 @@ game_core.prototype.client_on_shot_sync = function (shot_data) {
   ammo.acc = shot_data.ammo.acc;
 
   this.sprites.ammo[ ++this.last_sprite_id ] = ammo;
-  this.assets.sounds.fire.play();
+  assets.sounds.fire.play();
 };
 
 game_core.prototype.client_on_game_over = function (data) {
@@ -655,7 +663,7 @@ game_core.prototype.drawHUD = function (ctx) {
   ctx.fillRect(190, this.config.world.height - 45, (this.config.world.width - 190) * (this.local_player.health / 1000), this.config.world.height - 5);
 
   // overlay
-  ctx.drawImage(this.assets.images.hud, 0, this.config.world.height - this.assets.images.hud.height);
+  ctx.drawImage(assets.images.hud, 0, this.config.world.height - assets.images.hud.height);
 
   // angle
   var text = Math.round(90 - this.local_player.cannon.angle) + '°';
@@ -776,30 +784,73 @@ game_player.prototype.draw = function (ctx) {
 * Terrain class
 ***/
 
-var game_terrain = function (world) {
+var game_terrain = function (world, game) {
+  this.game = game;
   this.world = world;
+  this.map = 'map.png';
+  this.canvas = {};
+  this.ctx = {};
+
+  // generate a simple bitmap for collision
+  this.collision_map = [];
+  for (var x = 0; x < this.world.width; x++) {
+    this.collision_map.push([]);
+  }
+
+  // only the server has authority over collisions
+  if (this.game.server) {
+    this.canvas = new Canvas(this.world.width, this.world.height);
+    this.ctx = this.canvas.getContext('2d');
+    var image_file = fs.readFileSync(this.map);
+    var image = new Canvas.Image;
+    image.src = image_file;
+    this.ctx.drawImage(image, 0, 0, image.width, image.height);
+    this.set_collision_map_from_current_canvas(image);
+
+    this.ctx.globalCompositeOperation = 'destination-out';
+  } else {
+    this.canvas = document.createElement('canvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.canvas.width = this.world.width;
+    this.canvas.height = this.world.height;
+    this.ctx.drawImage(assets.images['map'], 0, 0);
+
+    this.ctx.globalCompositeOperation = 'destination-out';
+  }
 };
 
+game_terrain.prototype.set_collision_map_from_current_canvas = function () {
+  var bitmap = this.ctx.getImageData(0,0,this.world.width, this.world.height);
+
+  for (var x = 0; x < this.world.width; x++) {
+    for (var y = 0; y < this.world.height; y++) {
+      var idx = ( (y * this.world.width) + x ) * 4 + 3;
+      this.collision_map[x][y] = (bitmap.data[idx] < 255) ? 0 : 1;
+    }
+  }
+}
+
 game_terrain.prototype.ground_level_at_x = function (x) {
-  // FIXME: hardcoded ground level at 100
-  return this.world.height - 200;
+  var y = this.world.height;
+  var x = Math.round(x);
+
+  if (x < 0 || x >= this.world.width) {
+    return this.world.height;
+  }
+
+  // start from the top then go down until pixel is hit
+  for (var i = 0; i < this.world.height; i++) {
+    if (this.collision_map[x][i]) {
+      y = i;
+      break;
+    }
+  }
+
+  return y;
 };
 
 game_terrain.prototype.draw = function (ctx) {
-  ctx.beginPath();
-
-  var gradient = ctx.createLinearGradient(0, this.world.height, 0, this.ground_level_at_x(0));
-  gradient.addColorStop(0, '#c18e00');
-  gradient.addColorStop(1, '#703b00');
-  ctx.fillStyle = gradient;
-
-  ctx.moveTo(0, this.ground_level_at_x(0));
-  game.ctx.lineTo(this.world.width, this.ground_level_at_x(this.world.width));
-  // finish creating the rect so we can fill it
-  ctx.lineTo(this.world.width, this.world.height);
-  ctx.lineTo(0, this.world.height);
-  ctx.closePath();
-  ctx.fill();
+  ctx.drawImage(this.canvas, 0, 0);
 };
 
 
@@ -856,7 +907,7 @@ game_ammo.prototype.update_physics = function (delta) {
 game_ammo.prototype.hit = function () {
   // if on the client, draw animation of explosion + play sounds
   if (!this.game.server) {
-    this.game.assets.sounds.explosion.play();
+    assets.sounds.explosion.play();
 
     this.game.animations[ ++this.game.last_animation_id ] = new game_animation(this.game, this);
   } else {
@@ -876,6 +927,14 @@ game_ammo.prototype.hit = function () {
     // we can proceed with next round after a 3000ms pause
     setTimeout(this.game.server_start_next_round.bind(this.game), 3000);
   }
+
+    // update the canvas
+    this.game.terrain.ctx.beginPath();
+    this.game.terrain.ctx.arc(this.pos.x, this.pos.y, this.explosion_radius, 0, Math.PI * 2, 0);
+    this.game.terrain.ctx.fill();
+
+    // update collision map
+    this.game.terrain.set_collision_map_from_current_canvas();
 
   // self delete
   for (var i in this.game.sprites.ammo) {
@@ -956,7 +1015,3 @@ var utils = {
   to_radians: function (degrees) { return (degrees * (Math.PI/180)).fixed(6); }
 }
 
-// if we're on the server, this is a module
-if ( 'undefined' != typeof global ) {
-  module.exports = global.game_core = game_core;
-}

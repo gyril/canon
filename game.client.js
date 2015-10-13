@@ -1,5 +1,20 @@
 var socket = socket || io();
 
+var assets = {
+  images: {
+    hud: new Image(),
+    map: new Image()
+  },
+  sounds: {
+    fire: new Audio('fire.mp3'),
+    // move: new Audio('move.mp3'),
+    // cannon: new Audio('cannon.mp3'),
+    explosion: new Audio('explode.mp3')
+  }
+};
+assets.images['hud'].src = 'hud.png';
+assets.images['map'].src = 'map.png';
+
 var game = {};
 
   //When loading, we store references to our
@@ -22,17 +37,4 @@ function createGame () {
 
   // fetch the rendering contexts
   game.ctx = game.viewport.getContext('2d');
-
-  game.assets = {
-    images: {
-      hud: new Image()
-    },
-    sounds: {
-      fire: new Audio('fire.mp3'),
-      // move: new Audio('move.mp3'),
-      // cannon: new Audio('cannon.mp3'),
-      explosion: new Audio('explode.mp3')
-    }
-  };
-  game.assets.images['hud'].src = 'hud.png';
 }

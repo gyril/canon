@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "description": "Play Canon Online",
   "main": "app.js",
+  "engines": {
+    "node": "0.10.x"
+  },
   "dependencies": {
     "canvas": "git://github.com/bpartridge/node-canvas-heroku.git",
     "express": "^4.0.0",
@@ -13,6 +16,5 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
-  "license": "ISC",
-  "engine": "node 0.12.6"
+  "license": "ISC"
 }

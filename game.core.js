@@ -303,6 +303,10 @@ game_core.prototype.send_server_update_to_clients = function () {
 };
 
 game_core.prototype.client_first_sync_from_server = function (sync_data) {
+  // start the music
+  assets.sounds.music_track_1.loop = true;
+  assets.sounds.music_track_1.play();
+
   // generate same terrain
   this.terrain = new game_terrain(this.config.world, this);
   this.terrain.collision_map = sync_data.terrain.collision_map;
@@ -842,7 +846,7 @@ game_terrain.prototype.check_collision_at_point = function (point) {
   var y = Math.round(point.y);
   var x = Math.round(point.x);
 
-  if (x < 0 || x >= this.world.width) {
+  if (x < 0 || x >= this.world.width || y >= this.world.height) {
     return true;
   }
 

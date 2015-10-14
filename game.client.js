@@ -9,7 +9,8 @@ var assets = {
     fire: new Audio('fire.mp3'),
     // move: new Audio('move.mp3'),
     // cannon: new Audio('cannon.mp3'),
-    explosion: new Audio('explode.mp3')
+    explosion: new Audio('explode.mp3'),
+    music_track_1: new Audio('music_track_1.mp3')
   }
 };
 assets.images['hud'].src = 'hud.png';

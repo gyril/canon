@@ -370,10 +370,16 @@ game_core.prototype.client_load_controls = function () {
         // dragging right
         this.controls.ctx.drawImage(assets.images.joystick_1, 76, 448, 75, 75);
         this.controls.direction = 'right';
+
+        // other is normal
+        this.controls.ctx.drawImage(assets.images.joystick_1, this.config.world.width - 44 - 75, 117, 75, 75);
       } else {
         // dragging left
         this.controls.ctx.drawImage(assets.images.joystick_1, 12, 448, 75, 75);
         this.controls.direction = 'left';
+
+        // other is normal
+        this.controls.ctx.drawImage(assets.images.joystick_1, this.config.world.width - 44 - 75, 117, 75, 75);
       }
     }
 
@@ -382,10 +388,16 @@ game_core.prototype.client_load_controls = function () {
         // dragging down
         this.controls.ctx.drawImage(assets.images.joystick_1, this.config.world.width - 44 - 75, 149, 75, 75);
         this.controls.direction = 'down';
+
+        // other is normal
+        this.controls.ctx.drawImage(assets.images.joystick_1, 44, 448, 75, 75);
       } else {
         // dragging up
         this.controls.ctx.drawImage(assets.images.joystick_1, this.config.world.width - 44 - 75, 85, 75, 75);
         this.controls.direction = 'up';
+
+        // other is normal
+        this.controls.ctx.drawImage(assets.images.joystick_1, 44, 448, 75, 75);
       }
     }
 

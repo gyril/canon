@@ -323,52 +323,57 @@ game_core.prototype.client_load_controls = function () {
 
   var _this = this;
 
-  this.controls.canvas.addEventListener('mousedown', function (e) {
+  function handle_down (e) {
     if (e.offsetX > 54 && e.offsetX < 115 && e.offsetY > 456 && e.offsetY < 516) {
-      _this.controls.is_dragging_joystick = true;
-      _this.controls.x_origin = e.offsetX;
+      this.controls.is_dragging_joystick = true;
+      this.controls.x_origin = e.offsetX;
     }
 
     if (e.offsetX > 850 && e.offsetX < 912 && e.offsetY > 456 && e.offsetY < 516) {
-      _this.controls.fire = true;
+      this.controls.fire = true;
     }
-  });
+  };
 
-  this.controls.canvas.addEventListener('mousemove', function (e) {
-    if (!_this.controls.is_dragging_joystick) return;
+  function handle_move (e) {
+    if (!this.controls.is_dragging_joystick) return;
 
-    _this.controls.ctx.clearRect(0,0,_this.config.world.width,_this.config.world.height);
-    _this.controls.ctx.drawImage(assets.images.joystick_2, 28, 470, 106, 30);
-    _this.controls.ctx.drawImage(assets.images.joystick_3, _this.config.world.width - 44 - 75, 448, 75, 75);
+    this.controls.ctx.clearRect(0,0,this.config.world.width,this.config.world.height);
+    this.controls.ctx.drawImage(assets.images.joystick_2, 28, 470, 106, 30);
+    this.controls.ctx.drawImage(assets.images.joystick_3, this.config.world.width - 44 - 75, 448, 75, 75);
 
-    if (e.offsetX > _this.controls.x_origin) {
+    if (e.offsetX > this.controls.x_origin) {
       // dragging right
-      _this.controls.ctx.drawImage(assets.images.joystick_1, 76, 448, 75, 75);
-      _this.controls.direction = 'right';
+      this.controls.ctx.drawImage(assets.images.joystick_1, 76, 448, 75, 75);
+      this.controls.direction = 'right';
     } else {
       // dragging left
-      _this.controls.ctx.drawImage(assets.images.joystick_1, 12, 448, 75, 75);
-      _this.controls.direction = 'left';
+      this.controls.ctx.drawImage(assets.images.joystick_1, 12, 448, 75, 75);
+      this.controls.direction = 'left';
     }
 
-    // drag beyond = mouseup
-    if (e.offsetX <= 2 || e.offsetX >= (_this.config.world.width - 2) || e.offsetY <= 2 || e.offsetY >= (_this.config.world.height - 2)) {
-      mouseup();
+    // drag beyond = up
+    if (e.offsetX <= 2 || e.offsetX >= (this.config.world.width - 2) || e.offsetY <= 2 || e.offsetY >= (this.config.world.height - 2)) {
+      handle_up();
     }
 
-  });
+  };
 
-  function mouseup () {
-    _this.controls.is_dragging_joystick = false;
-    _this.controls.direction = null;
-    _this.controls.fire = false;
-    _this.controls.ctx.clearRect(0,0,_this.config.world.width,_this.config.world.height);
-    _this.controls.ctx.drawImage(assets.images.joystick_2, 28, 470, 106, 30);
-    _this.controls.ctx.drawImage(assets.images.joystick_1, 44, 448, 75, 75);
-    _this.controls.ctx.drawImage(assets.images.joystick_3, _this.config.world.width - 44 - 75, 448, 75, 75);
+  function handle_up (e) {
+    this.controls.is_dragging_joystick = false;
+    this.controls.direction = null;
+    this.controls.fire = false;
+    this.controls.ctx.clearRect(0,0,this.config.world.width,this.config.world.height);
+    this.controls.ctx.drawImage(assets.images.joystick_2, 28, 470, 106, 30);
+    this.controls.ctx.drawImage(assets.images.joystick_1, 44, 448, 75, 75);
+    this.controls.ctx.drawImage(assets.images.joystick_3, this.config.world.width - 44 - 75, 448, 75, 75);
   }
 
-  this.controls.canvas.addEventListener('mouseup', mouseup);
+  this.controls.canvas.addEventListener('mousedown', handle_down.bind(this), false);
+  this.controls.canvas.addEventListener('touchstart', handle_down.bind(this), false);
+  this.controls.canvas.addEventListener('mousemove', handle_move.bind(this), false);
+  this.controls.canvas.addEventListener('touchmove', handle_move.bind(this), false);
+  this.controls.canvas.addEventListener('mouseup', handle_up.bind(this), false);
+  this.controls.canvas.addEventListener('touchend', handle_up.bind(this), false);
 };
 
 game_core.prototype.client_first_sync_from_server = function (sync_data) {

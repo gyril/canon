@@ -94,6 +94,9 @@ var game_core = function (server, clients) {
     this.accept_inputs = false;
     this.round_over = false;
 
+    // load controls for mobile phones
+    this.client_load_controls();
+
     // buffer of server states received
     this.server_updates = [];
 
@@ -300,6 +303,72 @@ game_core.prototype.send_server_update_to_clients = function () {
   for (var i in this.clients) {
     this.clients[i].emit( 'server_update', this.laststate );
   }
+};
+
+game_core.prototype.client_load_controls = function () {
+  this.controls = {
+    canvas: document.getElementById('controls'),
+    is_dragging_joystick: false,
+    direction: null,
+    fire: false
+  };
+
+  this.controls.canvas.width = this.config.world.width;
+  this.controls.canvas.height = this.config.world.height;
+
+  this.controls.ctx = this.controls.canvas.getContext('2d');
+  this.controls.ctx.drawImage(assets.images.joystick_2, 28, 470, 106, 30);
+  this.controls.ctx.drawImage(assets.images.joystick_1, 44, 448, 75, 75);
+  this.controls.ctx.drawImage(assets.images.joystick_3, this.config.world.width - 44 - 75, 448, 75, 75);
+
+  var _this = this;
+
+  this.controls.canvas.addEventListener('mousedown', function (e) {
+    if (e.offsetX > 54 && e.offsetX < 115 && e.offsetY > 456 && e.offsetY < 516) {
+      _this.controls.is_dragging_joystick = true;
+      _this.controls.x_origin = e.offsetX;
+    }
+
+    if (e.offsetX > 850 && e.offsetX < 912 && e.offsetY > 456 && e.offsetY < 516) {
+      _this.controls.fire = true;
+    }
+  });
+
+  this.controls.canvas.addEventListener('mousemove', function (e) {
+    if (!_this.controls.is_dragging_joystick) return;
+
+    _this.controls.ctx.clearRect(0,0,_this.config.world.width,_this.config.world.height);
+    _this.controls.ctx.drawImage(assets.images.joystick_2, 28, 470, 106, 30);
+    _this.controls.ctx.drawImage(assets.images.joystick_3, _this.config.world.width - 44 - 75, 448, 75, 75);
+
+    if (e.offsetX > _this.controls.x_origin) {
+      // dragging right
+      _this.controls.ctx.drawImage(assets.images.joystick_1, 76, 448, 75, 75);
+      _this.controls.direction = 'right';
+    } else {
+      // dragging left
+      _this.controls.ctx.drawImage(assets.images.joystick_1, 12, 448, 75, 75);
+      _this.controls.direction = 'left';
+    }
+
+    // drag beyond = mouseup
+    if (e.offsetX <= 2 || e.offsetX >= (_this.config.world.width - 2) || e.offsetY <= 2 || e.offsetY >= (_this.config.world.height - 2)) {
+      mouseup();
+    }
+
+  });
+
+  function mouseup () {
+    _this.controls.is_dragging_joystick = false;
+    _this.controls.direction = null;
+    _this.controls.fire = false;
+    _this.controls.ctx.clearRect(0,0,_this.config.world.width,_this.config.world.height);
+    _this.controls.ctx.drawImage(assets.images.joystick_2, 28, 470, 106, 30);
+    _this.controls.ctx.drawImage(assets.images.joystick_1, 44, 448, 75, 75);
+    _this.controls.ctx.drawImage(assets.images.joystick_3, _this.config.world.width - 44 - 75, 448, 75, 75);
+  }
+
+  this.controls.canvas.addEventListener('mouseup', mouseup);
 };
 
 game_core.prototype.client_first_sync_from_server = function (sync_data) {
@@ -564,12 +633,14 @@ game_core.prototype.client_handle_input = function () {
   var input = [];
 
   if ( this.keyboard.pressed('A') ||
-    this.keyboard.pressed('left')) {
+    this.keyboard.pressed('left') ||
+    this.controls.direction == 'left') {
      input.push('l');
     } //left
 
   if ( this.keyboard.pressed('D') ||
-    this.keyboard.pressed('right')) {
+    this.keyboard.pressed('right') ||
+    this.controls.direction == 'right') {
       input.push('r');
     } //right
 
@@ -583,7 +654,8 @@ game_core.prototype.client_handle_input = function () {
       input.push('u');
     } //up
 
-  if ( this.keyboard.pressed('space')) {
+  if ( this.keyboard.pressed('space') ||
+     this.controls.fire) {
       this.keyboard.pressing_space += this.keyboard.pressing_space == 100 ? 0 : 1;
     } else {
       if (this.keyboard.pressing_space) {

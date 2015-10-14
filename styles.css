@@ -12,11 +12,22 @@ html , body {
   text-align: center;
 }
 
-#viewport {
+#game {
+  position: relative;
+}
+
+#viewport, #controls {
+  position: absolute;
+  top: 0px;
+  left: 0px;
   border: 1px solid white;
   width : 960px;
   height : 540px;
   z-index:100;
+}
+
+#controls {
+  z-index: 101;
 }
 
 h1 {

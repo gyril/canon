@@ -64,11 +64,8 @@ var game_core = function (server, clients) {
     this.net_ping = 0;
     this.net_latency = 0;
 
-    // this.socket.on('first_sync', this.client_first_sync_from_server.bind(this));
-    // this.socket.on('server_update', this.client_on_server_update.bind(this));
-    // this.socket.on('next_round', this.client_on_next_round.bind(this));
-    // this.socket.on('shot_sync', this.client_on_shot_sync.bind(this));
-    // this.socket.on('ping', this.client_onping.bind(this));
+    // are we on a mobile device?
+    this.on_mobile = (/Android/i.test(navigator.userAgent) || /iPhone|iPad|iPod/i.test(navigator.userAgent));
 
     // defer events so we can add fake client lag
     function addEventHandler (eventName, handler) {
@@ -313,6 +310,8 @@ game_core.prototype.client_load_controls = function () {
     direction: null,
     fire: false
   };
+
+  if (!this.on_mobile) return;
 
   this.controls.canvas.width = this.config.world.width;
   this.controls.canvas.height = this.config.world.height;

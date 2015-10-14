@@ -6,7 +6,8 @@ var assets = {
     map: new Image(),
     joystick_1: new Image(),
     joystick_2: new Image(),
-    joystick_3: new Image()
+    joystick_3: new Image(),
+    joystick_4: new Image()
   },
   sounds: {
     fire: new Audio('fire.mp3'),
@@ -22,6 +23,7 @@ assets.images['map'].src = 'map.png';
 assets.images['joystick_1'].src = 'joystick_1.png';
 assets.images['joystick_2'].src = 'joystick_2.png';
 assets.images['joystick_3'].src = 'joystick_3.png';
+assets.images['joystick_4'].src = 'joystick_4.png';
 
 var game = {};
 

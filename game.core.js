@@ -309,6 +309,7 @@ game_core.prototype.client_load_controls = function () {
   this.controls = {
     canvas: document.getElementById('controls'),
     is_dragging_joystick: false,
+    is_dragging_cannon: false,
     direction: null,
     fire: false
   };
@@ -317,13 +318,24 @@ game_core.prototype.client_load_controls = function () {
   this.controls.canvas.height = this.config.world.height;
 
   this.controls.ctx = this.controls.canvas.getContext('2d');
+  // joystick
   this.controls.ctx.drawImage(assets.images.joystick_2, 28, 470, 106, 30);
   this.controls.ctx.drawImage(assets.images.joystick_1, 44, 448, 75, 75);
+  // fire
   this.controls.ctx.drawImage(assets.images.joystick_3, this.config.world.width - 44 - 75, 448, 75, 75);
+  // cannon
+  this.controls.ctx.drawImage(assets.images.joystick_4, this.config.world.width - 21 - 75, 100, 30, 106);
+  this.controls.ctx.drawImage(assets.images.joystick_1, this.config.world.width - 44 - 75, 117, 75, 75);
 
   var _this = this;
 
   function handle_down (e) {
+    if (e.targetTouches) {
+      e.preventDefault();
+      e.offsetX = e.targetTouches[0].clientX;
+      e.offsetY = e.targetTouches[0].clientY;
+    }
+
     if (e.offsetX > 54 && e.offsetX < 115 && e.offsetY > 456 && e.offsetY < 516) {
       this.controls.is_dragging_joystick = true;
       this.controls.x_origin = e.offsetX;
@@ -332,23 +344,49 @@ game_core.prototype.client_load_controls = function () {
     if (e.offsetX > 850 && e.offsetX < 912 && e.offsetY > 456 && e.offsetY < 516) {
       this.controls.fire = true;
     }
+
+    if (e.offsetX > 850 && e.offsetX < 912 && e.offsetY > 129 && e.offsetY < 184) {
+      this.controls.is_dragging_cannon = true;
+      this.controls.y_origin = e.offsetY;
+    }
   };
 
   function handle_move (e) {
-    if (!this.controls.is_dragging_joystick) return;
+    if (!this.controls.is_dragging_joystick && !this.controls.is_dragging_cannon) return;
+
+    if (e.targetTouches) {
+      e.preventDefault();
+      e.offsetX = e.targetTouches[0].clientX;
+      e.offsetY = e.targetTouches[0].clientY;
+    }
 
     this.controls.ctx.clearRect(0,0,this.config.world.width,this.config.world.height);
     this.controls.ctx.drawImage(assets.images.joystick_2, 28, 470, 106, 30);
     this.controls.ctx.drawImage(assets.images.joystick_3, this.config.world.width - 44 - 75, 448, 75, 75);
+    this.controls.ctx.drawImage(assets.images.joystick_4, this.config.world.width - 21 - 75, 100, 30, 106);
 
-    if (e.offsetX > this.controls.x_origin) {
-      // dragging right
-      this.controls.ctx.drawImage(assets.images.joystick_1, 76, 448, 75, 75);
-      this.controls.direction = 'right';
-    } else {
-      // dragging left
-      this.controls.ctx.drawImage(assets.images.joystick_1, 12, 448, 75, 75);
-      this.controls.direction = 'left';
+    if (this.controls.is_dragging_joystick) {
+      if (e.offsetX > this.controls.x_origin) {
+        // dragging right
+        this.controls.ctx.drawImage(assets.images.joystick_1, 76, 448, 75, 75);
+        this.controls.direction = 'right';
+      } else {
+        // dragging left
+        this.controls.ctx.drawImage(assets.images.joystick_1, 12, 448, 75, 75);
+        this.controls.direction = 'left';
+      }
+    }
+
+    if (this.controls.is_dragging_cannon) {
+      if (e.offsetY > this.controls.y_origin) {
+        // dragging down
+        this.controls.ctx.drawImage(assets.images.joystick_1, this.config.world.width - 44 - 75, 149, 75, 75);
+        this.controls.direction = 'down';
+      } else {
+        // dragging up
+        this.controls.ctx.drawImage(assets.images.joystick_1, this.config.world.width - 44 - 75, 85, 75, 75);
+        this.controls.direction = 'up';
+      }
     }
 
     // drag beyond = up
@@ -360,12 +398,19 @@ game_core.prototype.client_load_controls = function () {
 
   function handle_up (e) {
     this.controls.is_dragging_joystick = false;
+    this.controls.is_dragging_cannon = false;
     this.controls.direction = null;
     this.controls.fire = false;
+
     this.controls.ctx.clearRect(0,0,this.config.world.width,this.config.world.height);
+    // joystick
     this.controls.ctx.drawImage(assets.images.joystick_2, 28, 470, 106, 30);
     this.controls.ctx.drawImage(assets.images.joystick_1, 44, 448, 75, 75);
+    // fire
     this.controls.ctx.drawImage(assets.images.joystick_3, this.config.world.width - 44 - 75, 448, 75, 75);
+    // cannon
+    this.controls.ctx.drawImage(assets.images.joystick_4, this.config.world.width - 21 - 75, 100, 30, 106);
+    this.controls.ctx.drawImage(assets.images.joystick_1, this.config.world.width - 44 - 75, 117, 75, 75);
   }
 
   this.controls.canvas.addEventListener('mousedown', handle_down.bind(this), false);
@@ -650,12 +695,14 @@ game_core.prototype.client_handle_input = function () {
     } //right
 
   if ( this.keyboard.pressed('S') ||
-    this.keyboard.pressed('down')) {
+    this.keyboard.pressed('down') ||
+    this.controls.direction == 'down') {
       input.push('d');
     } //down
 
   if ( this.keyboard.pressed('W') ||
-    this.keyboard.pressed('up')) {
+    this.keyboard.pressed('up') ||
+    this.controls.direction == 'up') {
       input.push('u');
     } //up
 

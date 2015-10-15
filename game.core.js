@@ -68,7 +68,7 @@ var game_core = function (server, clients) {
     this.on_mobile = (/Android/i.test(navigator.userAgent) || /iPhone|iPad|iPod/i.test(navigator.userAgent));
 
     // camera
-    this.camera = new game_camera();
+    this.camera = new game_camera(this.config.world);
 
     // defer events so we can add fake client lag
     function addEventHandler (eventName, handler) {
@@ -586,8 +586,7 @@ game_core.prototype.client_on_next_round = function (data) {
 
   // zoom on current player
   var pos = this.sprites.players[this.round_player_index].pos;
-  var offset_pos = {x: 2 * (pos.x - this.config.world.width / (2 * 2)), y: 2 * (pos.y - this.config.world.height / (2 * 2))};
-  this.camera.set_options({zoom: 2, offset: offset_pos});
+  this.camera.set_options({zoom: 2, offset: pos, center: true});
 
   // end of the round, refuse inputs until server says OK again
   this.round_id = setTimeout(this.client_end_round.bind(this), this.config.round_duration * 1000);
@@ -1173,7 +1172,9 @@ game_animation.prototype.draw = function (ctx) {
 * Camera class
 ***/
 
-var game_camera = function () {
+var game_camera = function (world) {
+  this.bounds = {x: world.width, y: world.height};
+
   this.zoom = 1;
   this.offset = {x: 0, y: 0};
   this.pan_progress = 0;
@@ -1186,6 +1187,15 @@ var game_camera = function () {
 game_camera.prototype.set_options = function (options) {
   this.zoom_target = options.zoom || this.zoom;
   this.offset_target = options.offset || this.offset;
+
+  if (options.center) {
+    this.offset_target = {x: 2 * (this.offset_target.x - this.bounds.x / (this.zoom_target * 2)), y: 2 * (this.offset_target.y - this.bounds.y / (this.zoom_target * 2))};
+  }
+
+  this.offset_target.x = Math.max(0, this.offset_target.x);
+  this.offset_target.x = Math.min(this.zoom_target * this.bounds.x / 2, this.offset_target.x);
+  this.offset_target.y = Math.max(0, this.offset_target.y);
+  this.offset_target.y = Math.min(this.zoom_target * this.bounds.y / 2, this.offset_target.y);
 
   this.pan_id = setInterval(function () {
     if (this.pan_progress >= 1000) {

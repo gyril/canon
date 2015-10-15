@@ -19,7 +19,7 @@ var assets = {
 };
 
 assets.images['hud'].src = 'hud.png';
-assets.images['map'].src = 'map.png';
+assets.images['map'].src = 'planet.png';
 assets.images['joystick_1'].src = 'joystick_1.png';
 assets.images['joystick_2'].src = 'joystick_2.png';
 assets.images['joystick_3'].src = 'joystick_3.png';

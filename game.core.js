@@ -845,7 +845,7 @@ var game_player = function (game, index, client) {
 
 
   this.acc = {x: 0, y:0 };
-  this.pos = {x: 120 + index * (960 - 240), y: 240};
+  this.pos = {x: 420 + index * (960 - (420 * 2)), y: 0};
   this.server_sent_update = false;
   this.server_data = null;
   this.size = {x: 10, y: 10};
@@ -946,7 +946,7 @@ game_player.prototype.draw = function (ctx) {
 var game_terrain = function (world, game) {
   this.game = game;
   this.world = world;
-  this.map = 'map.png';
+  this.map = 'planet.png';
   this.canvas = {};
   this.ctx = {};
 
@@ -1056,6 +1056,8 @@ game_ammo.prototype.update_physics = function (delta) {
   }
 
   // check collisions with players
+  var exploded = false;
+
   for (var j in this.game.sprites.players) {
     var player = this.game.sprites.players[j];
 
@@ -1064,12 +1066,13 @@ game_ammo.prototype.update_physics = function (delta) {
         player.pos.y - player.size.y / 2 < this.pos.y + this.size.y / 2 &&
         player.pos.y + player.size.y / 2 > this.pos.y + this.size.y / 2) {
       this.hit();
+      exploded = true;
     }
   }
 
   // check collision with the ground
   var pos_offset = {x: this.pos.x, y: this.pos.y + this.size.y};
-  if (this.game.terrain.check_collision_at_point(pos_offset)) {
+  if (!exploded && this.game.terrain.check_collision_at_point(pos_offset)) {
     this.hit();
   }
 };

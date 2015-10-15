@@ -67,6 +67,9 @@ var game_core = function (server, clients) {
     // are we on a mobile device?
     this.on_mobile = (/Android/i.test(navigator.userAgent) || /iPhone|iPad|iPod/i.test(navigator.userAgent));
 
+    // camera
+    this.camera = new game_camera();
+
     // defer events so we can add fake client lag
     function addEventHandler (eventName, handler) {
       var client_fake_lag = 0;
@@ -581,6 +584,10 @@ game_core.prototype.client_on_next_round = function (data) {
   this.accept_inputs = (this.round_player_index == this.local_player.player_index);
   this.round_over = false; // a flag to display '0' time left when we fire
 
+  // zoom on current player
+  var pos = this.sprites.players[this.round_player_index].pos;
+  this.camera.set_options({zoom: 2, offset: pos});
+
   // end of the round, refuse inputs until server says OK again
   this.round_id = setTimeout(this.client_end_round.bind(this), this.config.round_duration * 1000);
 };
@@ -589,6 +596,9 @@ game_core.prototype.client_end_round = function () {
   clearTimeout(this.round_id);
   this.accept_inputs = false;
   this.keyboard.pressing_space = 0;
+
+  // dezoom
+  this.camera.set_options({zoom: 1, offset: {x: 0, y: 0}});
 
   // set the timer display to 0
   this.round_over = true;
@@ -891,10 +901,12 @@ game_player.prototype.set_server_data = function (data) {
 };
 
 game_player.prototype.draw = function (ctx) {
+  var this_camera = this.game.camera.transform(this);
+
   // body
   ctx.beginPath();
   ctx.fillStyle = this.color;
-  ctx.arc(this.pos.x, this.pos.y - this.size.y / 2, this.size.x, 0, Math.PI, false);
+  ctx.arc(this_camera.pos.x, this_camera.pos.y - this_camera.size.y / 2, this_camera.size.x, 0, Math.PI, false);
   ctx.closePath();
   ctx.fill();
 
@@ -902,23 +914,23 @@ game_player.prototype.draw = function (ctx) {
   ctx.beginPath();
   ctx.fillStyle = 'white';
   ctx.save();
-  ctx.translate(this.pos.x + 1, this.pos.y - this.size.y / 2);
+  ctx.translate(this_camera.pos.x + 1, this_camera.pos.y - this_camera.size.y / 2);
   ctx.rotate(utils.to_radians( 270 - this.cannon.angle ));
-  ctx.fillRect(0, 0, 2, this.size.y);
+  ctx.fillRect(0, 0, 2, this_camera.size.y);
   ctx.restore();
 
   // HP
   ctx.fillStyle = 'red';
-  ctx.fillRect(this.pos.x - this.size.x * 2, this.pos.y + this.size.y, this.size.x * 2 * 2, 3);
+  ctx.fillRect(this_camera.pos.x - this_camera.size.x * 2, this_camera.pos.y + this_camera.size.y, this_camera.size.x * 2 * 2, 3);
   ctx.fillStyle = 'green';
-  ctx.fillRect(this.pos.x - this.size.x * 2, this.pos.y + this.size.y, this.size.x * 2 * 2 * (this.health / 1000), 3);
+  ctx.fillRect(this_camera.pos.x - this_camera.size.x * 2, this_camera.pos.y + this_camera.size.y, this_camera.size.x * 2 * 2 * (this.health / 1000), 3);
 
   // player indicating arrow
   if (this.player_index == this.game.round_player_index) {
-    ctx.moveTo(this.pos.x, this.pos.y - this.size.y * 3);
-    ctx.lineTo(this.pos.x + 6, this.pos.y - this.size.y * 3 - 10);
-    ctx.lineTo(this.pos.x - 6, this.pos.y - this.size.y * 3 - 10);
-    ctx.lineTo(this.pos.x, this.pos.y - this.size.y * 3);
+    ctx.moveTo(this_camera.pos.x, this_camera.pos.y - this_camera.size.y * 3);
+    ctx.lineTo(this_camera.pos.x + 6, this_camera.pos.y - this_camera.size.y * 3 - 10);
+    ctx.lineTo(this_camera.pos.x - 6, this_camera.pos.y - this_camera.size.y * 3 - 10);
+    ctx.lineTo(this_camera.pos.x, this_camera.pos.y - this_camera.size.y * 3);
     ctx.fillStyle = 'green';
     ctx.strokeStyle = 'white';
     ctx.fill();
@@ -1005,7 +1017,8 @@ game_terrain.prototype.ground_level_above_point = function (point) {
 };
 
 game_terrain.prototype.draw = function (ctx) {
-  ctx.drawImage(this.canvas, 0, 0);
+  var this_camera = this.game.camera.transform({pos: {x: 0, y:0}, size:{x: this.world.width, y:this.world.height}});
+  ctx.drawImage(this.canvas, this_camera.pos.x, this_camera.pos.y, this_camera.size.x, this_camera.size.y);
 };
 
 
@@ -1016,12 +1029,13 @@ game_terrain.prototype.draw = function (ctx) {
 var game_ammo = function (game, player, power) {
   this.game = game;
 
-  this.max_power = 300;
+  this.max_power = 500;
   this.max_damage = 300;
   this.explosion_radius = 50;
   // 0 means everyone hit gets max_damage, 1 is linear, etc.
   this.damage_decay = 2;
   this.size = {x: 2, y: 2};
+  this.weight = 2;
 
   this.pos = utils.pos_sum( utils.pos_sum(player.pos, {x: 1, y: -1* player.size.y / 2}), utils.to_cart_coord(1.5 * player.size.y, utils.to_radians(player.cannon.angle)) );
   this.acc = utils.to_cart_coord(this.max_power * (power / 100), utils.to_radians(player.cannon.angle));
@@ -1029,7 +1043,7 @@ var game_ammo = function (game, player, power) {
 
 game_ammo.prototype.update_physics = function (delta) {
   // apply gravity to the current acceleration
-  this.acc = utils.pos_sum(this.acc, utils.pos_scalar_mult(this.game.config.gravity_vector, delta));
+  this.acc = utils.pos_sum(this.acc, utils.pos_scalar_mult(this.game.config.gravity_vector, delta * this.weight));
 
   // apply the current acceleration to the position
   this.pos = utils.pos_sum(this.pos, utils.pos_scalar_mult(this.acc, delta));
@@ -1101,9 +1115,11 @@ game_ammo.prototype.hit = function () {
 };
 
 game_ammo.prototype.draw = function (ctx) {
+  var this_camera = this.game.camera.transform(this);
+
   ctx.beginPath();
   ctx.fillStyle = '#dedede';
-  ctx.arc(this.pos.x, this.pos.y, this.size.x, 0, Math.PI * 2, 0);
+  ctx.arc(this_camera.pos.x, this_camera.pos.y, this_camera.size.x, 0, Math.PI * 2, 0);
   ctx.fill();
 };
 
@@ -1121,7 +1137,7 @@ var game_animation = function (game, animating) {
   this.duration = 1;
   this.start_time = this.game.local_time;
 
-  this.size = this.start_size;
+  this.size = {x: this.start_size, y: 0};
 };
 
 game_animation.prototype.update = function () {
@@ -1135,19 +1151,67 @@ game_animation.prototype.update = function () {
       }
     }
   } else {
-    this.size = utils.lerp_e(this.start_size, this.end_size, progress/this.duration, 4);
+    this.size.x = utils.lerp_e(this.start_size, this.end_size, progress/this.duration, 4);
   }
 };
 
 game_animation.prototype.draw = function (ctx) {
+  var this_camera = this.game.camera.transform(this);
+
   ctx.beginPath();
-  var gradient = ctx.createRadialGradient(this.pos.x,this.pos.y,this.size ,this.pos.x,this.pos.y,0);
+  var gradient = ctx.createRadialGradient(this_camera.pos.x,this_camera.pos.y,this_camera.size.x,this_camera.pos.x,this_camera.pos.y,0);
   gradient.addColorStop(0, 'red');
   gradient.addColorStop(1, 'yellow');
   ctx.fillStyle = gradient;
-  ctx.arc(this.pos.x, this.pos.y, this.size, 0, Math.PI * 2, 0);
+  ctx.arc(this_camera.pos.x, this_camera.pos.y, this_camera.size.x, 0, Math.PI * 2, 0);
   ctx.fill();
 };
+
+
+/***
+* Camera class
+***/
+
+var game_camera = function () {
+  this.zoom = 1;
+  this.offset = {x: 0, y: 0};
+  this.pan_progress = 0;
+  this.pan_id = null;
+
+  this.zoom_target = null;
+  this.offset_target = null;
+};
+
+game_camera.prototype.set_options = function (options) {
+  this.zoom_target = options.zoom || this.zoom;
+  this.offset_target = options.offset || this.offset;
+
+  this.pan_id = setInterval(function () {
+    if (this.pan_progress >= 1000) {
+      this.pan_progress = 0;
+      clearInterval(this.pan_id);
+    } else {
+      this.zoom = utils.lerp(this.zoom, this.zoom_target, this.pan_progress / 1000);
+      this.offset = utils.pos_lerp(this.offset, this.offset_target, this.pan_progress / 1000);
+      this.pan_progress += (1000 / 25);
+    }
+  }.bind(this), 30);
+};
+
+game_camera.prototype.transform = function (obj) {
+  var pos_x_zoomed = obj.pos.x * this.zoom;
+  var pos_y_zoomed = obj.pos.y * this.zoom;
+  var pos_x = pos_x_zoomed - this.offset.x;
+  var pos_y = pos_y_zoomed - this.offset.y;
+  var size_x = obj.size.x * this.zoom;
+  var size_y = obj.size.y * this.zoom;
+
+  return {
+    pos: {x: pos_x, y: pos_y},
+    size: {x: size_x, y: size_y}
+  }
+};
+
 
 /***
 * Utilities

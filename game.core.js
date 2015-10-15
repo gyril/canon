@@ -586,7 +586,8 @@ game_core.prototype.client_on_next_round = function (data) {
 
   // zoom on current player
   var pos = this.sprites.players[this.round_player_index].pos;
-  this.camera.set_options({zoom: 2, offset: pos});
+  var offset_pos = {x: 2 * (pos.x - this.config.world.width / (2 * 2)), y: 2 * (pos.y - this.config.world.height / (2 * 2))};
+  this.camera.set_options({zoom: 2, offset: offset_pos});
 
   // end of the round, refuse inputs until server says OK again
   this.round_id = setTimeout(this.client_end_round.bind(this), this.config.round_duration * 1000);

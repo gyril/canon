@@ -10,20 +10,20 @@ var assets = {
     joystick_4: new Image()
   },
   sounds: {
-    fire: new Audio('fire.mp3'),
-    // move: new Audio('move.mp3'),
-    // cannon: new Audio('cannon.mp3'),
-    explosion: new Audio('explode.mp3'),
-    music_track_1: new Audio('music_track_1.mp3')
+    fire: new Audio('assets/fire.mp3'),
+    // move: new Audio('assets/move.mp3'),
+    // cannon: new Audio('assets/cannon.mp3'),
+    explosion: new Audio('assets/explode.mp3'),
+    music_track_1: new Audio('assets/music_track_1.mp3')
   }
 };
 
-assets.images['hud'].src = 'hud.png';
-assets.images['map'].src = 'map.png';
-assets.images['joystick_1'].src = 'joystick_1.png';
-assets.images['joystick_2'].src = 'joystick_2.png';
-assets.images['joystick_3'].src = 'joystick_3.png';
-assets.images['joystick_4'].src = 'joystick_4.png';
+assets.images['hud'].src = 'assets/hud.png';
+assets.images['map'].src = 'assets/map.png';
+assets.images['joystick_1'].src = 'assets/joystick_1.png';
+assets.images['joystick_2'].src = 'assets/joystick_2.png';
+assets.images['joystick_3'].src = 'assets/joystick_3.png';
+assets.images['joystick_4'].src = 'assets/joystick_4.png';
 
 var game = {};
 

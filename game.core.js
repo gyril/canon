@@ -339,16 +339,16 @@ game_core.prototype.client_load_controls = function () {
       e.offsetY = e.targetTouches[0].clientY;
     }
 
-    if (e.offsetX > 54 && e.offsetX < 115 && e.offsetY > 456 && e.offsetY < 516) {
+    if (e.offsetX > 30 && e.offsetX < 170 && e.offsetY > 420 && e.offsetY < 535) {
       this.controls.is_dragging_joystick = true;
       this.controls.x_origin = e.offsetX;
     }
 
-    if (e.offsetX > 850 && e.offsetX < 912 && e.offsetY > 456 && e.offsetY < 516) {
+    if (e.offsetX > 815 && e.offsetX < 955 && e.offsetY > 420 && e.offsetY < 535) {
       this.controls.fire = true;
     }
 
-    if (e.offsetX > 850 && e.offsetX < 912 && e.offsetY > 129 && e.offsetY < 184) {
+    if (e.offsetX > 815 && e.offsetX < 955 && e.offsetY > 95 && e.offsetY < 210) {
       this.controls.is_dragging_cannon = true;
       this.controls.y_origin = e.offsetY;
     }
@@ -957,7 +957,7 @@ game_player.prototype.draw = function (ctx) {
 var game_terrain = function (world, game) {
   this.game = game;
   this.world = world;
-  this.map = 'map.png';
+  this.map = 'assets/map.png';
   this.canvas = {};
   this.ctx = {};
 

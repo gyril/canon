@@ -20,7 +20,7 @@ html , body {
   height: 542px;
 }
 
-#viewport, #controls {
+#viewport, #hud, #controls {
   position: absolute;
   top: 0px;
   left: 0px;
@@ -30,8 +30,13 @@ html , body {
   z-index:100;
 }
 
-#controls {
+#hud {
   z-index: 101;
+  height : 630px;
+}
+
+#controls {
+  z-index: 102;
 }
 
 h1 {

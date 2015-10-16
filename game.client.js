@@ -3,6 +3,7 @@ var socket = socket || io();
 var assets = {
   images: {
     hud: new Image(),
+    hud_2: new Image(),
     map: new Image(),
     joystick_1: new Image(),
     joystick_2: new Image(),
@@ -19,6 +20,7 @@ var assets = {
 };
 
 assets.images['hud'].src = 'assets/hud.png';
+assets.images['hud_2'].src = 'assets/hud_2.png';
 assets.images['map'].src = 'assets/map.png';
 assets.images['joystick_1'].src = 'assets/joystick_1.png';
 assets.images['joystick_2'].src = 'assets/joystick_2.png';

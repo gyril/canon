@@ -97,6 +97,8 @@ var game_core = function (server, clients) {
     // load controls for mobile phones
     this.client_load_controls();
 
+    this.hud = new game_hud(this);
+
     // buffer of server states received
     this.server_updates = [];
 
@@ -696,8 +698,8 @@ game_core.prototype.client_draw_frame = function () {
     animation.update();
   }
 
-  // paint the HUD on top of everything
-  this.drawHUD(ctx);
+  // paint the HUD on its own canvas
+  this.hud.draw();
 
   window.requestAnimationFrame(this.client_draw_frame.bind(this));
 };
@@ -771,64 +773,95 @@ game_core.prototype.server_handle_input = function (client, input, input_time, i
   }
 };
 
-game_core.prototype.drawHUD = function (ctx) {
-  ctx.font = '12px Open Sans';
-  ctx.textAlign = 'left';
-  ctx.fillStyle = 'white';
-  ctx.fillText(this.net_ping + ' ping', 10, 20);
+/***
+* HUD class
+***/
 
-  // var client_turn = (this.accept_inputs && this.round)
-  // ctx.fillText((client_turn ? 'Your turn' : 'Please wait'), 10, 65);
+var game_hud = function (game) {
+  this.game = game;
+
+  this.width = this.game.config.world.width;
+  this.height = this.game.config.world.height + 90;
+
+  this.canvas = document.getElementById('hud');
+  this.ctx = this.canvas.getContext('2d');
+
+  this.canvas.width = this.width;
+  this.canvas.height = this.height;
+};
+
+game_hud.prototype.drawText = function (text, x, y, font, color, align, stroke, stroke_color) {
+  var font = font || '12px Open Sans';
+  var color = color || 'white';
+  var align = align || 'left';
+
+  this.ctx.font = font;
+  this.ctx.textAlign = align;
+  this.ctx.fillStyle = color;
+  this.ctx.fillText(text, x, y);
+
+  if (stroke) {
+    this.ctx.strokeStyle = stroke_color;
+    this.ctx.strokeText(text, x, y);
+  }
+};
+
+game_hud.prototype.draw = function () {
+  var ctx = this.ctx;
+
+  ctx.clearRect(0,0,this.width,this.height);
+
+  // ping
+  this.drawText(this.game.net_ping + ' ping', 10, 20);
 
   // round
-  var text = this.round > 0 ? 'round ' + this.round : 'wait for game to start';
-  var x = this.config.world.width / 2;
+  var text = this.game.round > 0 ? 'round ' + this.game.round : 'wait for game to start';
+  var x = this.game.config.world.width / 2;
   var y = 30;
-  ctx.font = 'bold 18px Open Sans';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = 'red';
-  ctx.fillText(text, x, y);
-  ctx.strokeStyle = 'white';
-  ctx.strokeText(text, x, y);
+  this.drawText(text, x, y, 'bold 18px Open Sans', 'red', 'center', true, 'white');
 
   // time left
-  var text = this.round_over ? 0 : Math.max(0, Math.ceil(this.config.round_duration - (this.local_time - this.round_start_time)));
-  var x = this.config.world.width / 2;
+  var text = this.game.round_over ? 0 : Math.max(0, Math.ceil(this.game.config.round_duration - (this.game.local_time - this.game.round_start_time)));
+  var x = this.width / 2;
   var y = 65;
-  ctx.font = 'bold 36px Open Sans';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = 'red';
-  ctx.fillText(text, x, y);
-  ctx.strokeStyle = 'white';
-  ctx.strokeText(text, x, y);
+  this.drawText(text, x, y, 'bold 36px Open Sans', 'red', 'center', true, 'white');
 
-  // power bar
-  if (this.keyboard.pressing_space) {
-    ctx.fillStyle = 'green';
-    ctx.moveTo(55, this.config.world.height - 20);
-    ctx.arc(55, this.config.world.height - 20, 120, 0, Math.PI * 2 * (1 - (5/16) * (this.keyboard.pressing_space / 100)), true);
-    ctx.lineTo(55, this.config.world.height - 20);
-    ctx.fill();
-  }
+  // angle (circle)
+  var cannon_angle = Math.round(90 - this.game.local_player.cannon.angle);
+  ctx.beginPath();
+  ctx.fillStyle = 'blue';
+  ctx.moveTo(784, this.height - 12);
+  ctx.lineTo(784 - 68, this.height - 12);
+  ctx.arc(784, this.height - 12, 68, -Math.PI, -Math.PI * (1/2 - (cannon_angle / 180)), 0);
+  ctx.closePath();
+  ctx.fill();
 
-  // HP bar
+  // // HP (circle)
+  var player_health = Math.round(this.game.local_player.health / 10);
+  ctx.beginPath();
   ctx.fillStyle = 'red';
-  ctx.fillRect(190, this.config.world.height - 45, (this.config.world.width - 190) * (this.local_player.health / 1000), this.config.world.height - 5);
+  ctx.moveTo(195, this.height - 12);
+  ctx.lineTo(195 - 68, this.height - 12);
+  ctx.arc(195, this.height - 12, 68, -Math.PI, -Math.PI * (1 - (player_health / 100)), 0);
+  ctx.closePath();
+  ctx.fill();
 
   // overlay
-  ctx.drawImage(assets.images.hud, 0, this.config.world.height - assets.images.hud.height);
+  ctx.drawImage(assets.images.hud_2, 0, this.height - assets.images.hud_2.height);
 
-  // angle
-  var text = Math.round(90 - this.local_player.cannon.angle) + '°';
-  var x = 70;
-  var y = this.config.world.height - 26;
-  ctx.font = 'bold 36px Open Sans';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = 'orange';
-  ctx.fillText(text, x, y);
-  ctx.strokeStyle = 'white';
-  ctx.strokeText(text, x, y);
+  // HP (number)
+  this.drawText(player_health, 190, 610, '27px Open Sans', 'red', 'center');
 
+  // angle (number)
+  this.drawText(cannon_angle + '°', 785, 610, '27px Open Sans', 'blue', 'center');
+
+  // power bar
+  ctx.fillStyle = '#D8D8D8';
+  ctx.fillRect(286, this.height - 48, 424, 38);
+  if (this.game.keyboard.pressing_space) {
+    ctx.fillStyle = '#63CF14';
+    ctx.fillRect(286, this.height - 48, 424 * (this.game.keyboard.pressing_space / 100), 38);
+  }
 };
 
 

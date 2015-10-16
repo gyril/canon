@@ -1056,6 +1056,8 @@ game_ammo.prototype.update_physics = function (delta) {
   }
 
   // check collisions with players
+  var exploded = false;
+
   for (var j in this.game.sprites.players) {
     var player = this.game.sprites.players[j];
 
@@ -1064,12 +1066,13 @@ game_ammo.prototype.update_physics = function (delta) {
         player.pos.y - player.size.y / 2 < this.pos.y + this.size.y / 2 &&
         player.pos.y + player.size.y / 2 > this.pos.y + this.size.y / 2) {
       this.hit();
+      exploded = true;
     }
   }
 
   // check collision with the ground
   var pos_offset = {x: this.pos.x, y: this.pos.y + this.size.y};
-  if (this.game.terrain.check_collision_at_point(pos_offset)) {
+  if (!exploded && this.game.terrain.check_collision_at_point(pos_offset)) {
     this.hit();
   }
 };

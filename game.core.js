@@ -282,6 +282,7 @@ game_core.prototype.process_input = function (player) {
 
 game_core.prototype.game_over = function (dead) {
   clearTimeout(this.round_id);
+  this.round_id = 0;
 
   for (var i in this.clients) {
     this.clients[ i ].emit('game_over', {loser_index: dead.player_index});
@@ -594,11 +595,13 @@ game_core.prototype.client_on_next_round = function (data) {
 
 game_core.prototype.client_end_round = function () {
   clearTimeout(this.round_id);
+  this.round_id = 0;
+
   this.accept_inputs = false;
   this.keyboard.pressing_space = 0;
 
   // dezoom
-  this.camera.set_options({zoom: 1, offset: {x: 0, y: 0}});
+  this.camera.set_options({zoom: 1, offset: {x: 0, y: 0}, pan: true});
 
   // set the timer display to 0
   this.round_over = true;
@@ -609,6 +612,7 @@ game_core.prototype.player_fired = function (player) {
 
   // don't call to start the next round! we have some computing to do first
   clearTimeout(this.round_id);
+  this.round_id = 0;
 
   // create the ammo
   var ammo = new game_ammo(this, player, player.inputs_vector.fire);
@@ -852,6 +856,7 @@ var game_player = function (game, index, client) {
   this.weight = 10;
   this.cannon = {angle: 90};
   this.speed = 80;
+  this.cannon_speed = 40;
   this.health = 1000;
   this.color = this.game.config.colors[ this.player_index ];
 
@@ -881,7 +886,7 @@ game_player.prototype.update_physics = function (delta) {
     this.acc.y = 0;
   }
 
-  this.cannon = utils.angle_sum(this.cannon, utils.angle_scalar_mult(this.inputs_vector.cannon, (20 * delta).fixed(3)));
+  this.cannon = utils.angle_sum(this.cannon, utils.angle_scalar_mult(this.inputs_vector.cannon, (this.cannon_speed * delta).fixed(3)));
 };
 
 game_player.prototype.take_damage = function (damage) {
@@ -901,6 +906,12 @@ game_player.prototype.set_server_data = function (data) {
 };
 
 game_player.prototype.draw = function (ctx) {
+  var is_playing = this.player_index == this.game.round_player_index;
+
+  if (is_playing && this.game.round_id) {
+    this.game.camera.set_options({zoom: 2, offset: this.pos, center: true});
+  }
+
   var this_camera = this.game.camera.transform(this);
 
   // body
@@ -926,7 +937,7 @@ game_player.prototype.draw = function (ctx) {
   ctx.fillRect(this_camera.pos.x - this_camera.size.x * 2, this_camera.pos.y + this_camera.size.y, this_camera.size.x * 2 * 2 * (this.health / 1000), 3);
 
   // player indicating arrow
-  if (this.player_index == this.game.round_player_index) {
+  if (is_playing) {
     ctx.moveTo(this_camera.pos.x, this_camera.pos.y - this_camera.size.y * 3);
     ctx.lineTo(this_camera.pos.x + 6, this_camera.pos.y - this_camera.size.y * 3 - 10);
     ctx.lineTo(this_camera.pos.x - 6, this_camera.pos.y - this_camera.size.y * 3 - 10);
@@ -1188,6 +1199,9 @@ var game_camera = function (world) {
 };
 
 game_camera.prototype.set_options = function (options) {
+  this.pan_progress = 0;
+  clearInterval(this.pan_id);
+
   this.zoom_target = options.zoom || this.zoom;
   this.offset_target = options.offset || this.offset;
 
@@ -1200,16 +1214,22 @@ game_camera.prototype.set_options = function (options) {
   this.offset_target.y = Math.max(0, this.offset_target.y);
   this.offset_target.y = Math.min(this.zoom_target * this.bounds.y / 2, this.offset_target.y);
 
-  this.pan_id = setInterval(function () {
-    if (this.pan_progress >= 1000) {
-      this.pan_progress = 0;
-      clearInterval(this.pan_id);
-    } else {
-      this.zoom = utils.lerp(this.zoom, this.zoom_target, this.pan_progress / 1000);
-      this.offset = utils.pos_lerp(this.offset, this.offset_target, this.pan_progress / 1000);
-      this.pan_progress += (1000 / 25);
-    }
-  }.bind(this), 30);
+  if (options.pan) {
+    this.pan_id = setInterval(function () {
+      if (this.pan_progress >= 1000) {
+        this.pan_progress = 0;
+        clearInterval(this.pan_id);
+      } else {
+        this.zoom = utils.lerp(this.zoom, this.zoom_target, this.pan_progress / 1000);
+        this.offset = utils.pos_lerp(this.offset, this.offset_target, this.pan_progress / 1000);
+        this.pan_progress += (1000 / 25);
+      }
+    }.bind(this), 30);
+  } else {
+    this.zoom = this.zoom_target;
+    this.offset = this.offset_target;
+  }
+
 };
 
 game_camera.prototype.transform = function (obj) {

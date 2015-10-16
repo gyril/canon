@@ -871,14 +871,15 @@ game_player.prototype.update_physics = function (delta) {
   }
 
   // apply gravity to the current acceleration
-  this.acc = utils.pos_sum(this.acc, utils.pos_scalar_mult(this.game.config.gravity_vector, delta * this.weight));
+  var gravity_vector = utils.pos_scalar_mult( utils.pos_sum(this.pos, {x: -480, y: -270}), -1 );
+  this.acc = utils.pos_sum(this.acc, utils.pos_scalar_mult(gravity_vector, delta * this.weight));
   // apply the current acceleration to the position
   this.pos = utils.pos_sum(this.pos, utils.pos_scalar_mult(this.acc, delta));
 
   // check collision with the ground
   if (this.game.terrain.check_collision_at_point(this.pos)) {
     this.pos.y = (this.game.terrain.ground_level_above_point(this.pos)).fixed(3);
-    this.acc.y = 0;
+    this.acc = {x: 0, y:0};
   }
 
   this.cannon = utils.angle_sum(this.cannon, utils.angle_scalar_mult(this.inputs_vector.cannon, (20 * delta).fixed(3)));

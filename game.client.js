@@ -45,7 +45,7 @@ function createGame () {
 
   // adjust their size
   game.viewport.width = game.config.world.width;
-  game.viewport.height = game.config.world.height;
+  game.viewport.height = game.config.world.height - 90;
 
   // fetch the rendering contexts
   game.ctx = game.viewport.getContext('2d');

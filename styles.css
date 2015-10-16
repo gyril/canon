@@ -30,9 +30,12 @@ html , body {
   z-index:100;
 }
 
+#viewport {
+  height : 450px;
+}
+
 #hud {
   z-index: 101;
-  height : 630px;
 }
 
 #controls {

@@ -780,8 +780,8 @@ game_core.prototype.server_handle_input = function (client, input, input_time, i
 var game_hud = function (game) {
   this.game = game;
 
-  this.width = this.game.config.world.width;
-  this.height = this.game.config.world.height + 90;
+  this.width = 960;
+  this.height = 540;
 
   this.canvas = document.getElementById('hud');
   this.ctx = this.canvas.getContext('2d');
@@ -816,7 +816,7 @@ game_hud.prototype.draw = function () {
 
   // round
   var text = this.game.round > 0 ? 'round ' + this.game.round : 'wait for game to start';
-  var x = this.game.config.world.width / 2;
+  var x = this.width / 2;
   var y = 30;
   this.drawText(text, x, y, 'bold 18px Open Sans', 'red', 'center', true, 'white');
 
@@ -850,17 +850,17 @@ game_hud.prototype.draw = function () {
   ctx.drawImage(assets.images.hud_2, 0, this.height - assets.images.hud_2.height);
 
   // HP (number)
-  this.drawText(player_health, 190, 610, '27px Open Sans', 'red', 'center');
+  this.drawText(player_health, 190, 520, '27px Open Sans', 'red', 'center');
 
   // angle (number)
-  this.drawText(cannon_angle + '°', 785, 610, '27px Open Sans', 'blue', 'center');
+  this.drawText(cannon_angle + '°', 785, 520, '27px Open Sans', 'blue', 'center');
 
   // power bar
   ctx.fillStyle = '#D8D8D8';
-  ctx.fillRect(286, this.height - 48, 424, 38);
+  ctx.fillRect(275, this.height - 48, 424, 38);
   if (this.game.keyboard.pressing_space) {
     ctx.fillStyle = '#63CF14';
-    ctx.fillRect(286, this.height - 48, 424 * (this.game.keyboard.pressing_space / 100), 38);
+    ctx.fillRect(275, this.height - 48, 424 * (this.game.keyboard.pressing_space / 100), 38);
   }
 };
 

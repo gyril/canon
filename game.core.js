@@ -893,12 +893,16 @@ var game_player = function (game, index, client) {
   this.health = 1000;
   this.color = this.game.config.colors[ this.player_index ];
 
+  this.dead = false;
+
   this.inputs = [];
   this.inputs_vector = { pos: {x:0, y:0}, cannon: {angle: 0}, fire: false };
   this.last_input_seq = 1;
 };
 
 game_player.prototype.update_physics = function (delta) {
+  if (this.dead) return;
+
   // temporarily account for inputs vector
   var tmp_pos = utils.pos_sum(this.pos, utils.pos_scalar_mult(this.inputs_vector.pos, (this.speed * delta).fixed(3)));
 
@@ -936,6 +940,7 @@ game_player.prototype.take_damage = function (damage) {
 
 game_player.prototype.die = function () {
   console.log('PLAYER IS DEAD');
+  this.dead = true;
   this.game.game_over(this);
 };
 
@@ -1231,7 +1236,8 @@ var game_camera = function (world) {
   this.bounds = {x: world.width, y: world.height};
 
   this.zoom = 1;
-  this.offset = {x: 0, y: 45};
+  // by default we want to see the bottom of the map — it's just more important
+  this.offset = {x: 0, y: world.height - this.height};
   this.pan_progress = 0;
   this.pan_id = null;
 
@@ -1253,10 +1259,10 @@ game_camera.prototype.set_options = function (options) {
 
   this.zoom_target = options.zoom || this.zoom;
 
-  // by default, center on the center of the world
-  var center_target = options.center || {x: this.bounds.x / 2, y: this.bounds.y / 2};
-
   if (options.center) {
+    // by default, center on the center of the world
+    var center_target = options.center || {x: this.bounds.x / 2, y: this.bounds.y / 2};
+
     // from center_target, get offset_target
     this.offset_target.x = center_target.x - (this.width / (2 * this.zoom_target));
     this.offset_target.y = center_target.y - (this.height / (2 * this.zoom_target));
@@ -1265,7 +1271,7 @@ game_camera.prototype.set_options = function (options) {
     this.offset_target.x = Math.min( Math.max(0, this.offset_target.x), this.bounds.x - (this.width / this.zoom_target) );
     this.offset_target.y = Math.min( Math.max(0, this.offset_target.y), this.bounds.y - (this.height / this.zoom_target) );
   } else {
-    this.offset_target = {x: 0, y: 0};
+    this.offset_target = {x: 0, y: this.bounds.y - this.height};
   }
 
   if (options.pan) {

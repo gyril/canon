@@ -589,7 +589,7 @@ game_core.prototype.client_on_next_round = function (data) {
 
   // zoom on current player
   var pos = this.sprites.players[this.round_player_index].pos;
-  this.camera.set_options({zoom: 2, offset: pos, center: true});
+  this.camera.set_options({zoom: 2, center: pos});
 
   // end of the round, refuse inputs until server says OK again
   this.round_id = setTimeout(this.client_end_round.bind(this), this.config.round_duration * 1000);
@@ -603,7 +603,7 @@ game_core.prototype.client_end_round = function () {
   this.keyboard.pressing_space = 0;
 
   // dezoom
-  this.camera.set_options({zoom: 1, offset: {x: 0, y: 0}, pan: true});
+  this.camera.set_options({zoom: 1, pan: true});
 
   // set the timer display to 0
   this.round_over = true;
@@ -919,6 +919,11 @@ game_player.prototype.update_physics = function (delta) {
     this.acc.y = 0;
   }
 
+  // only the server can kill players
+  if (this.game.server && this.pos.y >= this.game.config.world.height) {
+    this.die();
+  }
+
   this.cannon = utils.angle_sum(this.cannon, utils.angle_scalar_mult(this.inputs_vector.cannon, (this.cannon_speed * delta).fixed(3)));
 };
 
@@ -942,7 +947,7 @@ game_player.prototype.draw = function (ctx) {
   var is_playing = this.player_index == this.game.round_player_index;
 
   if (is_playing && this.game.round_id) {
-    this.game.camera.set_options({zoom: 2, offset: this.pos, center: true});
+    this.game.camera.set_options({zoom: 2, center: this.pos});
   }
 
   var this_camera = this.game.camera.transform(this);
@@ -1037,7 +1042,7 @@ game_terrain.prototype.check_collision_at_point = function (point) {
   var y = Math.round(point.y);
   var x = Math.round(point.x);
 
-  if (x < 0 || x >= this.world.width || y >= this.world.height) {
+  if (x < 0 || x >= this.world.width) {
     return true;
   }
 
@@ -1220,32 +1225,48 @@ game_animation.prototype.draw = function (ctx) {
 ***/
 
 var game_camera = function (world) {
+  this.width = 960;
+  this.height = 450;
+
   this.bounds = {x: world.width, y: world.height};
 
   this.zoom = 1;
-  this.offset = {x: 0, y: 0};
+  this.offset = {x: 0, y: 45};
   this.pan_progress = 0;
   this.pan_id = null;
 
   this.zoom_target = null;
-  this.offset_target = null;
+  this.offset_target = {};
 };
 
 game_camera.prototype.set_options = function (options) {
+  /*
+  * options: {
+  *   zoom: the desired level of zoom
+  *   center: what should occupy the center of the screen
+  *   pan: should we pan to get there
+  * }
+  */
+
   this.pan_progress = 0;
   clearInterval(this.pan_id);
 
   this.zoom_target = options.zoom || this.zoom;
-  this.offset_target = options.offset || this.offset;
+
+  // by default, center on the center of the world
+  var center_target = options.center || {x: this.bounds.x / 2, y: this.bounds.y / 2};
 
   if (options.center) {
-    this.offset_target = {x: 2 * (this.offset_target.x - this.bounds.x / (this.zoom_target * 2)), y: 2 * (this.offset_target.y - this.bounds.y / (this.zoom_target * 2))};
-  }
+    // from center_target, get offset_target
+    this.offset_target.x = center_target.x - (this.width / (2 * this.zoom_target));
+    this.offset_target.y = center_target.y - (this.height / (2 * this.zoom_target));
 
-  this.offset_target.x = Math.max(0, this.offset_target.x);
-  this.offset_target.x = Math.min(this.zoom_target * this.bounds.x / 2, this.offset_target.x);
-  this.offset_target.y = Math.max(0, this.offset_target.y);
-  this.offset_target.y = Math.min(this.zoom_target * this.bounds.y / 2, this.offset_target.y);
+    // check it's within boundaries
+    this.offset_target.x = Math.min( Math.max(0, this.offset_target.x), this.bounds.x - (this.width / this.zoom_target) );
+    this.offset_target.y = Math.min( Math.max(0, this.offset_target.y), this.bounds.y - (this.height / this.zoom_target) );
+  } else {
+    this.offset_target = {x: 0, y: 0};
+  }
 
   if (options.pan) {
     this.pan_id = setInterval(function () {
@@ -1266,10 +1287,8 @@ game_camera.prototype.set_options = function (options) {
 };
 
 game_camera.prototype.transform = function (obj) {
-  var pos_x_zoomed = obj.pos.x * this.zoom;
-  var pos_y_zoomed = obj.pos.y * this.zoom;
-  var pos_x = pos_x_zoomed - this.offset.x;
-  var pos_y = pos_y_zoomed - this.offset.y;
+  var pos_x = (obj.pos.x - this.offset.x) * this.zoom;
+  var pos_y = (obj.pos.y - this.offset.y) * this.zoom;
   var size_x = obj.size.x * this.zoom;
   var size_y = obj.size.y * this.zoom;
 

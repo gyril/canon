@@ -39,14 +39,4 @@ function createGame () {
 
   // create our game client instance.
   game = new game_core();
-
-  // fetch the viewport
-  game.viewport = document.getElementById('viewport');
-
-  // adjust their size
-  game.viewport.width = game.config.world.width;
-  game.viewport.height = game.config.world.height - 90;
-
-  // fetch the rendering contexts
-  game.ctx = game.viewport.getContext('2d');
 }

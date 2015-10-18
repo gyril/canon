@@ -21,25 +21,21 @@ html , body {
 }
 
 #viewport, #hud, #controls {
-  position: absolute;
+  position: fixed;
   top: 0px;
   left: 0px;
-  border: 1px solid white;
-  width : 960px;
-  height : 540px;
+  width : 100%;
   z-index:100;
-}
-
-#viewport {
-  height : 450px;
 }
 
 #hud {
   z-index: 101;
+  height : 100%;
 }
 
 #controls {
   z-index: 102;
+  height : 100%;
 }
 
 h1 {

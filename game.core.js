@@ -667,14 +667,14 @@ game_core.prototype.client_draw_frame = function () {
   this.client_handle_input();
   this.client_interpolate_sprites_positions();
 
-  var ctx = this.ctx;
+  var ctx = this.camera.ctx;
 
-  ctx.clearRect(0, 0, this.config.world.width, this.config.world.height);
-  var gradient = ctx.createLinearGradient(0, this.config.world.height, 0, 0);
+  ctx.clearRect(0, 0, this.camera.width, this.camera.height);
+  var gradient = ctx.createLinearGradient(0, this.camera.height, 0, 0);
   gradient.addColorStop(0, '#8CC4F3');
   gradient.addColorStop(1, '#003D81');
   ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, this.config.world.width, this.config.world.height);
+  ctx.fillRect(0, 0, this.camera.width, this.camera.height);
 
   this.terrain.draw(ctx);
 
@@ -780,8 +780,8 @@ game_core.prototype.server_handle_input = function (client, input, input_time, i
 var game_hud = function (game) {
   this.game = game;
 
-  this.width = 960;
-  this.height = 540;
+  this.width = window.innerWidth;
+  this.height = window.innerHeight;
 
   this.canvas = document.getElementById('hud');
   this.ctx = this.canvas.getContext('2d');
@@ -830,9 +830,9 @@ game_hud.prototype.draw = function () {
   var cannon_angle = Math.round(90 - this.game.local_player.cannon.angle);
   ctx.beginPath();
   ctx.fillStyle = 'blue';
-  ctx.moveTo(784, this.height - 12);
-  ctx.lineTo(784 - 68, this.height - 12);
-  ctx.arc(784, this.height - 12, 68, -Math.PI, -Math.PI * (1/2 - (cannon_angle / 180)), 0);
+  ctx.moveTo(this.width - 230, this.height - 22);
+  ctx.lineTo(this.width - 230 - this.width / 14, this.height - 22);
+  ctx.arc(this.width - 230, this.height - 22, this.width / 14, -Math.PI, -Math.PI * (1/2 - (cannon_angle / 180)), 0);
   ctx.closePath();
   ctx.fill();
 
@@ -840,27 +840,28 @@ game_hud.prototype.draw = function () {
   var player_health = Math.round(this.game.local_player.health / 10);
   ctx.beginPath();
   ctx.fillStyle = 'red';
-  ctx.moveTo(195, this.height - 12);
-  ctx.lineTo(195 - 68, this.height - 12);
-  ctx.arc(195, this.height - 12, 68, -Math.PI, -Math.PI * (1 - (player_health / 100)), 0);
+  ctx.moveTo(225, this.height - 22);
+  ctx.lineTo(225 - this.width / 14, this.height - 22);
+  ctx.arc(225, this.height - 22, this.width / 14, -Math.PI, -Math.PI * (1 - (player_health / 100)), 0);
   ctx.closePath();
   ctx.fill();
 
   // overlay
-  ctx.drawImage(assets.images.hud_2, 0, this.height - assets.images.hud_2.height);
+  var overlay_height = assets.images.hud_2.height * (this.width / assets.images.hud_2.width);
+  ctx.drawImage(assets.images.hud_2, 0, this.height - overlay_height, this.width, overlay_height);
 
   // HP (number)
-  this.drawText(player_health, 190, 520, '27px Open Sans', 'red', 'center');
+  this.drawText(player_health, 225, this.height - 30, '27px Open Sans', 'red', 'center');
 
   // angle (number)
-  this.drawText(cannon_angle + '°', 785, 520, '27px Open Sans', 'blue', 'center');
+  this.drawText(cannon_angle + '°', this.width - 230, this.height - 30, '27px Open Sans', 'blue', 'center');
 
   // power bar
   ctx.fillStyle = '#D8D8D8';
-  ctx.fillRect(275, this.height - 48, 424, 38);
+  ctx.fillRect(this.width / 4, this.height - 65, this.width / 2, 40);
   if (this.game.keyboard.pressing_space) {
     ctx.fillStyle = '#63CF14';
-    ctx.fillRect(275, this.height - 48, 424 * (this.game.keyboard.pressing_space / 100), 38);
+    ctx.fillRect(this.width / 4, this.height - 65, this.width / 2 * (this.game.keyboard.pressing_space / 100), 40);
   }
 };
 
@@ -1230,8 +1231,18 @@ game_animation.prototype.draw = function (ctx) {
 ***/
 
 var game_camera = function (world) {
-  this.width = 960;
-  this.height = 450;
+  this.width = window.innerWidth;
+  this.height = window.innerHeight - assets.images.hud_2.height * (window.innerWidth / assets.images.hud_2.width);
+
+  // fetch the viewport
+  this.canvas = document.getElementById('viewport');
+
+  // adjust their size
+  this.canvas.width = this.width;
+  this.canvas.height = this.height;
+
+  // fetch the rendering contexts
+  this.ctx = this.canvas.getContext('2d');
 
   this.bounds = {x: world.width, y: world.height};
 

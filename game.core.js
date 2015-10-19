@@ -753,6 +753,7 @@ game_core.prototype.client_handle_input = function () {
     } else {
       if (this.keyboard.pressing_space) {
         input.push('f:'+this.keyboard.pressing_space);
+        this.hud.last_shot_power = this.keyboard.pressing_space;
         this.keyboard.pressing_space = 0;
       }
     }
@@ -804,6 +805,8 @@ var game_hud = function (game) {
   this.canvas.style.width = this.width + 'px';
   this.canvas.height = this.height;
   this.canvas.style.height = this.height + 'px';
+
+  this.last_shot_power = 0;
 };
 
 game_hud.prototype.drawText = function (text, x, y, font, color, align, stroke, stroke_color) {
@@ -859,10 +862,16 @@ game_hud.prototype.draw = function () {
   var y = 30;
   this.drawText(text, x, y, 'bold 18px Open Sans', 'red', 'center', true, 'white');
 
+  // whose turn
+  var text = this.game.round_id && this.game.local_player.player_index == this.game.round_player_index ? 'your turn' : 'please wait';
+  var x = this.width / 2;
+  var y = 55;
+  this.drawText(text, x, y, 'bold 18px Open Sans', 'red', 'center', true, 'white');
+
   // time left
   var text = this.game.round_over ? 0 : Math.max(0, Math.ceil(this.game.config.round_duration - (this.game.local_time - this.game.round_start_time)));
   var x = this.width / 2;
-  var y = 65;
+  var y = 90;
   this.drawText(text, x, y, 'bold 36px Open Sans', 'red', 'center', true, 'white');
 
   // angle (number)
@@ -874,10 +883,13 @@ game_hud.prototype.draw = function () {
   // power bar
   ctx.fillStyle = '#D8D8D8';
   ctx.fillRect(this.width / 4, this.height * (1 - 3/24), this.width / 2, this.height * 1/24);
-  if (this.game.keyboard.pressing_space) {
+  var pressing_space = this.game.keyboard.pressing_space;
+  if (pressing_space) {
     ctx.fillStyle = '#63CF14';
-    ctx.fillRect(this.width / 4, this.height * (1 - 3/24), this.width / 2 * (this.game.keyboard.pressing_space / 100), this.height * 1/24);
+    ctx.fillRect(this.width / 4, this.height * (1 - 3/24), this.width / 2 * (pressing_space / 100), this.height * 1/24);
   }
+  ctx.fillStyle = '#2D2D2D';
+  ctx.fillRect(this.width / 4 * (1 + 2 * (this.last_shot_power / 100)), this.height * (1 - 3/24), 2, this.height * 1/24);
 };
 
 

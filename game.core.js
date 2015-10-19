@@ -15,6 +15,7 @@ var game_core = function (server, clients) {
     players_count: 2,
     colors: ['hsl(240, 50%, 50%)', 'hsl(0, 50%, 50%)'],
     gravity_vector: {x:0, y: 100},
+    map: 'map_2',
     world: { width : 960, height : 540 },
     round_duration: 10,
     time_before_round_one: 5
@@ -897,7 +898,7 @@ var game_player = function (game, index, client) {
 
 
   this.acc = {x: 0, y:0 };
-  this.pos = {x: 120 + index * (960 - 240), y: 240};
+  this.pos = {x: 120 + index * (960 - 240), y: 0};
   this.server_sent_update = false;
   this.server_data = null;
   this.size = {x: 10, y: 10};
@@ -1015,7 +1016,7 @@ game_player.prototype.draw = function (ctx) {
 var game_terrain = function (world, game) {
   this.game = game;
   this.world = world;
-  this.map = 'assets/map.png';
+  this.map = 'assets/' + this.game.config.map + '.png';
   this.canvas = {};
   this.ctx = {};
 

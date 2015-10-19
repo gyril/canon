@@ -15,27 +15,24 @@ html , body {
 }
 
 #game {
-  position: relative;
-  width: 962px;
-  height: 542px;
-}
-
-#viewport, #hud, #controls {
   position: fixed;
   top: 0px;
   left: 0px;
-  width : 100%;
+}
+
+#viewport, #hud, #controls {
+  position: absolute;
+  top: 0px;
+  left: 0px;
   z-index:100;
 }
 
 #hud {
   z-index: 101;
-  height : 100%;
 }
 
 #controls {
   z-index: 102;
-  height : 100%;
 }
 
 h1 {

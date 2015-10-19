@@ -68,7 +68,18 @@ var game_core = function (server, clients) {
     this.on_mobile = (/Android/i.test(navigator.userAgent) || /iPhone|iPad|iPod/i.test(navigator.userAgent));
 
     // camera
-    this.camera = new game_camera(this.config.world);
+    this.aspect_ratio = 16 / 9;
+    this.viewport = {};
+
+    if (window.innerWidth / window.innerHeight > this.aspect_ratio) {
+      this.viewport.height = window.innerHeight;
+      this.viewport.width = this.viewport.height * this.aspect_ratio;
+    } else {
+      this.viewport.width = window.innerWidth;
+      this.viewport.height = this.viewport.width / this.aspect_ratio;
+    }
+
+    this.camera = new game_camera(this.viewport, this.config.world);
 
     // defer events so we can add fake client lag
     function addEventHandler (eventName, handler) {
@@ -319,8 +330,10 @@ game_core.prototype.client_load_controls = function () {
 
   if (!this.on_mobile) return;
 
-  this.controls.canvas.width = this.config.world.width;
-  this.controls.canvas.height = this.config.world.height;
+  this.controls.canvas.width = this.viewport.width;
+  this.controls.canvas.style.width = this.viewport.width + 'px';
+  this.controls.canvas.height = this.viewport.height;
+  this.controls.canvas.style.height = this.viewport.height + 'px';
 
   this.controls.ctx = this.controls.canvas.getContext('2d');
   // joystick
@@ -780,14 +793,16 @@ game_core.prototype.server_handle_input = function (client, input, input_time, i
 var game_hud = function (game) {
   this.game = game;
 
-  this.width = window.innerWidth;
-  this.height = window.innerHeight;
+  this.width = this.game.viewport.width;
+  this.height = this.game.viewport.height;
 
   this.canvas = document.getElementById('hud');
   this.ctx = this.canvas.getContext('2d');
 
   this.canvas.width = this.width;
+  this.canvas.style.width = this.width + 'px';
   this.canvas.height = this.height;
+  this.canvas.style.height = this.height + 'px';
 };
 
 game_hud.prototype.drawText = function (text, x, y, font, color, align, stroke, stroke_color) {
@@ -811,6 +826,29 @@ game_hud.prototype.draw = function () {
 
   ctx.clearRect(0,0,this.width,this.height);
 
+  // angle (circle)
+  var cannon_angle = Math.round(90 - this.game.local_player.cannon.angle);
+  ctx.beginPath();
+  ctx.fillStyle = 'blue';
+  ctx.moveTo((this.width / 6) * 5, this.height * (1 - 1/24));
+  ctx.lineTo((this.width / 6) * 5 - this.width / 14, this.height * (1 - 1/24));
+  ctx.arc((this.width / 6) * 5, this.height * (1 - 1/24), this.width / 14, -Math.PI, -Math.PI * (1/2 - (cannon_angle / 180)), 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // // HP (circle)
+  var player_health = Math.round(this.game.local_player.health / 10);
+  ctx.beginPath();
+  ctx.fillStyle = 'red';
+  ctx.moveTo(this.width / 6, this.height * (1 - 1/24));
+  ctx.lineTo(this.width / 6 - this.width / 14, this.height * (1 - 1/24));
+  ctx.arc(this.width / 6, this.height * (1 - 1/24), this.width / 14, -Math.PI, -Math.PI * (1 - (player_health / 100)), 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // overlay
+  ctx.drawImage(assets.images.hud, 0, 0, this.width, this.height);
+
   // ping
   this.drawText(this.game.net_ping + ' ping', 10, 20);
 
@@ -826,42 +864,18 @@ game_hud.prototype.draw = function () {
   var y = 65;
   this.drawText(text, x, y, 'bold 36px Open Sans', 'red', 'center', true, 'white');
 
-  // angle (circle)
-  var cannon_angle = Math.round(90 - this.game.local_player.cannon.angle);
-  ctx.beginPath();
-  ctx.fillStyle = 'blue';
-  ctx.moveTo(this.width - 230, this.height - 22);
-  ctx.lineTo(this.width - 230 - this.width / 14, this.height - 22);
-  ctx.arc(this.width - 230, this.height - 22, this.width / 14, -Math.PI, -Math.PI * (1/2 - (cannon_angle / 180)), 0);
-  ctx.closePath();
-  ctx.fill();
-
-  // // HP (circle)
-  var player_health = Math.round(this.game.local_player.health / 10);
-  ctx.beginPath();
-  ctx.fillStyle = 'red';
-  ctx.moveTo(225, this.height - 22);
-  ctx.lineTo(225 - this.width / 14, this.height - 22);
-  ctx.arc(225, this.height - 22, this.width / 14, -Math.PI, -Math.PI * (1 - (player_health / 100)), 0);
-  ctx.closePath();
-  ctx.fill();
-
-  // overlay
-  var overlay_height = assets.images.hud_2.height * (this.width / assets.images.hud_2.width);
-  ctx.drawImage(assets.images.hud_2, 0, this.height - overlay_height, this.width, overlay_height);
+  // angle (number)
+  this.drawText(cannon_angle + '°', (this.width / 6) * 5, this.height * (1 - 1/24), '27px Open Sans', 'blue', 'center');
 
   // HP (number)
-  this.drawText(player_health, 225, this.height - 30, '27px Open Sans', 'red', 'center');
-
-  // angle (number)
-  this.drawText(cannon_angle + '°', this.width - 230, this.height - 30, '27px Open Sans', 'blue', 'center');
+  this.drawText(player_health, this.width / 6, this.height * (1 - 1/24), '27px Open Sans', 'red', 'center');
 
   // power bar
   ctx.fillStyle = '#D8D8D8';
-  ctx.fillRect(this.width / 4, this.height - 65, this.width / 2, 40);
+  ctx.fillRect(this.width / 4, this.height * (1 - 3/24), this.width / 2, this.height * 1/24);
   if (this.game.keyboard.pressing_space) {
     ctx.fillStyle = '#63CF14';
-    ctx.fillRect(this.width / 4, this.height - 65, this.width / 2 * (this.game.keyboard.pressing_space / 100), 40);
+    ctx.fillRect(this.width / 4, this.height * (1 - 3/24), this.width / 2 * (this.game.keyboard.pressing_space / 100), this.height * 1/24);
   }
 };
 
@@ -1230,16 +1244,18 @@ game_animation.prototype.draw = function (ctx) {
 * Camera class
 ***/
 
-var game_camera = function (world) {
-  this.width = window.innerWidth;
-  this.height = window.innerHeight - assets.images.hud_2.height * (window.innerWidth / assets.images.hud_2.width);
+var game_camera = function (viewport, world) {
+  this.width = viewport.width;
+  this.height = viewport.height * 4 / 5;
 
   // fetch the viewport
   this.canvas = document.getElementById('viewport');
 
   // adjust their size
   this.canvas.width = this.width;
+  this.canvas.style.width = this.width + 'px';
   this.canvas.height = this.height;
+  this.canvas.style.height = this.height + 'px';
 
   // fetch the rendering contexts
   this.ctx = this.canvas.getContext('2d');

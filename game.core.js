@@ -1126,7 +1126,7 @@ game_ammo.prototype.update_physics = function (delta) {
   }
 
   // check collisions with players
-  var exploded = false;
+  var potent = true;
 
   for (var j in this.game.sprites.players) {
     var player = this.game.sprites.players[j];
@@ -1136,13 +1136,30 @@ game_ammo.prototype.update_physics = function (delta) {
         player.pos.y - player.size.y / 2 < this.pos.y + this.size.y / 2 &&
         player.pos.y + player.size.y / 2 > this.pos.y + this.size.y / 2) {
       this.hit();
-      exploded = true;
+      potent = false;
     }
   }
 
   // check collision with the ground
+  if (this.pos.y > this.game.terrain.world.height) {
+    // no explosion possible
+    potent = false;
+
+    // self delete
+    for (var i in this.game.sprites.ammo) {
+      if (this == this.game.sprites.ammo[ i ]) {
+        delete this.game.sprites.ammo[ i ];
+      }
+    }
+
+    // start next round
+    if (this.game.server) {
+      setTimeout(this.game.server_start_next_round.bind(this.game), 3000);
+    }
+  }
+
   var pos_offset = {x: this.pos.x, y: this.pos.y + this.size.y};
-  if (!exploded && this.game.terrain.check_collision_at_point(pos_offset)) {
+  if (potent && this.game.terrain.check_collision_at_point(pos_offset)) {
     this.hit();
   }
 };

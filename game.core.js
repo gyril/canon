@@ -758,6 +758,27 @@ game_core.prototype.client_handle_input = function () {
       }
     }
 
+  if (this.keyboard.pressed('H')) {
+    this.camera.locked = false;
+    this.camera.offset.x -= 5;
+  }
+
+  if (this.keyboard.pressed('K')) {
+    this.camera.locked = false;
+    this.camera.offset.x += 5;
+  }
+
+  if (this.keyboard.pressed('J')) {
+    this.camera.locked = false;
+    this.camera.offset.y += 5;
+  }
+
+  if (this.keyboard.pressed('U')) {
+    this.camera.locked = false;
+    this.camera.offset.y -= 5;
+  }
+
+
   if (input.length) {
       //Update what sequence we are on now
     this.input_seq += 1;
@@ -932,24 +953,34 @@ game_player.prototype.update_physics = function (delta) {
   if (this.dead) return;
 
   // temporarily account for inputs vector
-  var tmp_pos = utils.pos_sum(this.pos, utils.pos_scalar_mult(this.inputs_vector.pos, (this.speed * delta).fixed(3)));
-
-  // is horizontal movement possible?
-  var tmp_pos_offset = {x: tmp_pos.x, y: tmp_pos.y - 1.5};
-  if (!this.game.terrain.check_collision_at_point(tmp_pos_offset)) {
-    this.pos = tmp_pos;
-  }
+  var movement_vector = utils.pos_scalar_mult(this.inputs_vector.pos, (this.speed * delta).fixed(3));
 
   // apply gravity to the current acceleration
   this.acc = utils.pos_sum(this.acc, utils.pos_scalar_mult(this.game.config.gravity_vector, delta * this.weight));
   // apply the current acceleration to the position
-  this.pos = utils.pos_sum(this.pos, utils.pos_scalar_mult(this.acc, delta));
+  var gravity_vector = utils.pos_scalar_mult(this.acc, delta);
 
-  // check collision with the ground
-  if (this.game.terrain.check_collision_at_point(this.pos)) {
-    this.pos.y = (this.game.terrain.ground_level_above_point(this.pos)).fixed(3);
+  // sum the two to get where we should be now
+  var tick_vector = utils.pos_sum(gravity_vector, movement_vector);
+  var target_x = this.pos.x + tick_vector.x;
+  var target_y = this.pos.y + tick_vector.y;
+
+  // check ground first
+  if (this.game.terrain.check_collision_at_point({x: this.pos.x, y: target_y})) {
+    target_y = this.pos.y;
     this.acc.y = 0;
   }
+
+  // then check the walls
+  if (this.game.terrain.check_collision_at_point({x: target_x, y: target_y - 1})) {
+    // collision even 3 pixels above? it's a wall or unclimbable slope, no movement on this axis
+    target_x = this.pos.x;
+  }
+
+  // adjust target_y based on new target_x
+  target_y = this.game.terrain.ground_level_above_point({x: target_x, y: target_y});
+
+  this.pos = {x: target_x, y: target_y};
 
   // only the server can kill players
   if (this.game.server && this.pos.y >= this.game.config.world.height) {
@@ -979,7 +1010,7 @@ game_player.prototype.set_server_data = function (data) {
 game_player.prototype.draw = function (ctx) {
   var is_playing = this.player_index == this.game.round_player_index;
 
-  if (is_playing && this.game.round_id) {
+  if (is_playing && this.game.round_id && this.game.camera.locked) {
     this.game.camera.set_options({zoom: 2, center: this.pos});
   }
 
@@ -988,7 +1019,7 @@ game_player.prototype.draw = function (ctx) {
   // body
   ctx.beginPath();
   ctx.fillStyle = this.color;
-  ctx.arc(this_camera.pos.x, this_camera.pos.y - this_camera.size.y / 2, this_camera.size.x, 0, Math.PI, false);
+  ctx.arc(this_camera.pos.x, this_camera.pos.y - this_camera.size.y, this_camera.size.x, 0, Math.PI, false);
   ctx.closePath();
   ctx.fill();
 
@@ -996,7 +1027,7 @@ game_player.prototype.draw = function (ctx) {
   ctx.beginPath();
   ctx.fillStyle = 'white';
   ctx.save();
-  ctx.translate(this_camera.pos.x + 1, this_camera.pos.y - this_camera.size.y / 2);
+  ctx.translate(this_camera.pos.x + 1, this_camera.pos.y - this_camera.size.y);
   ctx.rotate(utils.to_radians( 270 - this.cannon.angle ));
   ctx.fillRect(0, 0, 2, this_camera.size.y);
   ctx.restore();
@@ -1314,6 +1345,9 @@ game_camera.prototype.set_options = function (options) {
   this.pan_progress = 0;
   clearInterval(this.pan_id);
 
+  // relock it
+  this.locked = true;
+
   this.zoom_target = options.zoom || this.zoom;
 
   if (options.center) {
@@ -1369,6 +1403,7 @@ game_camera.prototype.transform = function (obj) {
 Number.prototype.fixed = function (n) { return parseFloat(this.toFixed(n)); };
 
 var utils = {
+  sign: function (n) {return n?n<0?-1:1:0;},
   lerp: function (p, n, t) { var _t = Number(t); _t = (Math.max(0, Math.min(1, _t))).fixed(3); return (p + _t * (n - p)).fixed(3); },
   lerp_e: function (p, n, t, e) { var _t = Number(t); _t = (Math.max(0, Math.min(1, _t))).fixed(3); return (p + Math.pow(_t, e) * (n - p)).fixed(3); },
   pos: function (vector) { return {x: vector.x, y: vector.y}; },

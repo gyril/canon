@@ -1390,8 +1390,8 @@ game_camera.prototype.transform = function (obj) {
   var size_y = obj.size.y * this.zoom;
 
   return {
-    pos: {x: pos_x, y: pos_y},
-    size: {x: size_x, y: size_y}
+    pos: {x: pos_x.fixed(), y: pos_y.fixed()},
+    size: {x: size_x.fixed(), y: size_y.fixed()}
   }
 };
 
